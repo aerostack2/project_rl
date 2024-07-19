@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+
+<sdf version="1.6">
+    <world name="world1">
+        <physics name="4ms" type="ignored">
+            <max_step_size>0.004</max_step_size>
+            <real_time_factor>1.0</real_time_factor>
+        </physics>
+        <plugin
+            filename="ignition-gazebo-physics-system"
+            name="ignition::gazebo::systems::Physics">
+        </plugin>
+        <plugin
+            filename="ignition-gazebo-scene-broadcaster-system"
+            name="ignition::gazebo::systems::SceneBroadcaster">
+        </plugin>
+        <plugin
+            filename="ignition-gazebo-user-commands-system"
+            name="ignition::gazebo::systems::UserCommands">
+        </plugin>
+        <plugin
+            filename="ignition-gazebo-sensors-system"
+            name="ignition::gazebo::systems::Sensors">
+            <render_engine>ogre2</render_engine>
+        </plugin>
+
+        <light type="directional"
+            name="sun">
+            <cast_shadows>true</cast_shadows>
+            <pose>0 0 10 0 0 0</pose>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+            <attenuation>
+                <range>1000</range>
+                <constant>0.9</constant>
+                <linear>0.01</linear>
+                <quadratic>0.001</quadratic>
+            </attenuation>
+            <direction>-0.5 0.1 -0.9</direction>
+        </light> 
+
+        <include>
+            <uri>model://ground_plane</uri>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole1</name>
+            <pose>4.06 6.02 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole2</name>
+            <pose>9.27 1.78 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole3</name>
+            <pose>8.07 9.15 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole4</name>
+            <pose>-3.12 3.31 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole5</name>
+            <pose>0.45 -0.91 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole6</name>
+            <pose>-0.35 -9.38 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole7</name>
+            <pose>7.08 -8.1 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole8</name>
+            <pose>-6.46 -0.95 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole9</name>
+            <pose>0.91 -5.71 0 0 0 0</pose>
+        </include>
+        <include>
+            <uri>model://pole</uri>
+            <name>pole10</name>
+            <pose>5.06 7.71 0 0 0 0</pose>
+        </include>
+
+    </world>
+</sdf>
