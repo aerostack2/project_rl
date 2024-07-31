@@ -1,63 +1,37 @@
+import rclpy
 from as2_python_api.drone_interface_teleop import DroneInterfaceTeleop
 from as2_msgs.srv import SetPoseWithID
 from ros_gz_interfaces.srv import ControlWorld
 from geometry_msgs.msg import PoseStamped, Pose
-from stable_baselines3.common.vec_env.base_vec_env import VecEnv
+
 import gymnasium as gym
-import math
-from transforms3d.euler import euler2quat
-from gymnasium.spaces import Box, Dict, Discrete, Tuple
-from typing import Any, Iterable, List, Optional, Sequence, Type, Union
+
+from stable_baselines3.common.vec_env.base_vec_env import VecEnvIndices, VecEnvObs
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv
 from stable_baselines3.common.vec_env.util import (
     copy_obs_dict,
     dict_to_obs,
     obs_space_info,
 )
+
 from collections import OrderedDict
+from typing import Any, List, Type
+import math
 import numpy as np
+from transforms3d.euler import euler2quat
 import random
 import time
-import rclpy
-from stable_baselines3.common.vec_env.base_vec_env import VecEnvIndices, VecEnvObs
+
+import xml.etree.ElementTree as ET
+
+from observation import Observation
+from action import Action
 
 
 class AS2GymnasiumEnv(VecEnv):
-    def __init__(self, world_name, world_size, grid_size, num_envs) -> None:
-        self.num_envs = num_envs
+    def __init__(self, world_name, world_size, grid_size, min_distance, num_envs) -> None:
 
-        self.render_mode = []
-        for _ in range(num_envs):
-            self.render_mode.append("human")
-
-        action_space = Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
-        observation_space = Dict(
-            {
-                "image": Box(
-                    low=0, high=2, shape=(1, grid_size, grid_size), dtype=np.uint8
-                ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown
-                "position": Box(low=0, high=grid_size - 1, shape=(2,), dtype=np.int32),
-                # Position of the drone in the grid
-            }
-        )
-
-        self.world_size = world_size
-        super().__init__(num_envs, observation_space, action_space)
-
-        self.keys, shapes, dtypes = obs_space_info(observation_space)
-
-        self.buf_obs = OrderedDict(
-            [
-                (k, np.zeros((self.num_envs,) +
-                 tuple(shapes[k]), dtype=dtypes[k]))
-                for k in self.keys
-            ]
-        )
-
-        self.buf_dones = np.zeros((self.num_envs,), dtype=bool)
-        self.buf_rews = np.zeros((self.num_envs,), dtype=np.float32)
-        self.buf_infos = [{} for _ in range(self.num_envs)]
-        self.actions = None
-        # Make a drone interface with functionality to control the internal state of the drone with rl env methods
+        # ROS 2 related stuff
         self.drone_interface_list = [
             DroneInterfaceTeleop(drone_id=f"drone{n}", use_sim_time=True)
             for n in range(num_envs)
@@ -70,27 +44,64 @@ class AS2GymnasiumEnv(VecEnv):
             ControlWorld, f"/world/{world_name}/control"
         )
 
-    def pause_physics(self):
+        self.render_mode = []
+        for _ in range(num_envs):
+            self.render_mode.append("human")
+
+        self.world_size = world_size
+        self.min_distance = min_distance
+
+        # Environment observation
+        self.observation_manager = Observation(grid_size, num_envs, self.drone_interface_list)
+        observation_space = self.observation_manager.observation_space
+
+        # Environment action
+        self.action_manager = Action()
+        action_space = self.action_manager.action_space
+
+        super().__init__(num_envs, observation_space, action_space)
+
+        self.keys = self.observation_manager.keys
+        self.buf_obs = self.observation_manager.buf_obs
+        self.buf_dones = np.zeros((self.num_envs,), dtype=bool)
+        self.buf_rews = np.zeros((self.num_envs,), dtype=np.float32)
+        self.buf_infos = [{} for _ in range(self.num_envs)]
+        self.actions = None
+        # Make a drone interface with functionality to control the internal state of the drone with rl env methods
+
+        # Other stuff
+        self.obstacles = self.parse_xml("assets/worlds/world1.sdf")
+        print(self.obstacles)
+
+    def pause_physics(self) -> bool:
         pause_physics_req = ControlWorld.Request()
         pause_physics_req.world_control.pause = True
         pause_physics_res = self.world_control_client.call(pause_physics_req)
         return pause_physics_res.success
 
-    def unpause_physics(self):
+    def unpause_physics(self) -> bool:
         pause_physics_req = ControlWorld.Request()
         pause_physics_req.world_control.pause = False
         pause_physics_res = self.world_control_client.call(pause_physics_req)
         return pause_physics_res.success
 
-    def set_random_pose(self, model_name):
+    def set_random_pose(self, model_name) -> tuple[bool, Pose]:
         set_model_pose_req = SetPoseWithID.Request()
         set_model_pose_req.pose.id = model_name
-        set_model_pose_req.pose.pose.position.x = round(
-            random.uniform(-self.world_size, self.world_size), 2
-        )
-        set_model_pose_req.pose.pose.position.y = round(
-            random.uniform(-self.world_size, self.world_size), 2
-        )
+        x = round(random.uniform(-self.world_size, self.world_size), 2)
+        y = round(random.uniform(-self.world_size, self.world_size), 2)
+        while True:
+            too_close = any(
+                self.distance((x, y), obstacle) < self.min_distance for obstacle in self.obstacles
+            )
+            if not too_close:
+                break
+            else:
+                x = round(random.uniform(-self.world_size, self.world_size), 2)
+                y = round(random.uniform(-self.world_size, self.world_size), 2)
+
+        set_model_pose_req.pose.pose.position.x = x
+        set_model_pose_req.pose.pose.position.y = y
         set_model_pose_req.pose.pose.position.z = 1.0
         yaw = round(random.uniform(0, 2 * math.pi), 2)
         quat = euler2quat(0, 0, yaw)
@@ -103,10 +114,25 @@ class AS2GymnasiumEnv(VecEnv):
         # Return success and position
         return set_model_pose_res.success, set_model_pose_req.pose.pose
 
-    def reset(self):
-        pose = Pose()
-        for drone in self.drone_interface_list:
-            self.set_random_pose(drone.drone_id)
+    def reset(self) -> VecEnvObs:
+        for idx, drone in enumerate(self.drone_interface_list):
+            self.pause_physics()
+            _, pose = self.set_random_pose(drone.drone_id)
+            poseStamped = PoseStamped()
+            poseStamped.pose = pose
+            poseStamped.header.frame_id = "earth"
+            drone.motion_ref_handler.position.send_position_command_with_yaw_angle(
+                pose=poseStamped,
+                twist_limit=0.0,
+                pose_frame_id="earth",
+                twist_frame_id="earth",
+                yaw_angle=0.0,
+            )
+            self.unpause_physics()
+            # rotate the drone to gather lidar data
+            # obs = self._get_obs(idx)
+            # self._save_obs(obs, idx)
+        return self._obs_from_buf()
 
     def step_async(self, actions: np.ndarray) -> None:
         self.actions = actions
@@ -143,20 +169,39 @@ class AS2GymnasiumEnv(VecEnv):
         return
 
     def _obs_from_buf(self) -> VecEnvObs:
-        return dict_to_obs(self.observation_space, copy_obs_dict(self.buf_obs))
+        # return all observations from all environments
+        return self.observation_manager._obs_from_buf()
 
-    def _save_obs(self, obs: VecEnvObs, env_id) -> None:
-        for key in self.keys:
-            if key is None:
-                self.buf_obs[key][env_id] = obs
-            else:
-                self.buf_obs[key][env_id] = obs[key]
+    def _save_obs(self, obs: VecEnvObs, env_id):
+        # save the observation for the specified environment
+        self.observation_manager._save_obs(obs, env_id)
+
+    def _get_obs(self, env_id) -> VecEnvObs:
+        # get the observation for the specified environment
+        return self.observation_manager._get_obs(env_id)
+
+    def parse_xml(self, filename: str) -> List[tuple[float, float]]:
+        """Parse XML file and return pole positions"""
+        world_tree = ET.parse(filename).getroot()
+        models = []
+        for model in world_tree.iter('include'):
+            if model.find('uri').text == 'model://pole':
+                x, y, *_ = model.find('pose').text.split(' ')
+                models.append((float(x), float(y)))
+
+        return models
+
+    def distance(self, point1: tuple[float, float], point2: tuple[float, float]) -> float:
+        """
+        Calculate the euclidean distance between 2 points
+        """
+        return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
 
 if __name__ == "__main__":
     rclpy.init()
     env = AS2GymnasiumEnv(world_name="world1", world_size=3,
-                          grid_size=200, num_envs=1)
+                          grid_size=200, min_distance=1.0, num_envs=1)
     print("Start mission")
 
     ##### ARM OFFBOARD #####
@@ -172,20 +217,6 @@ if __name__ == "__main__":
     env.drone_interface_list[0].takeoff(1.0, speed=1.0)
     time.sleep(1.0)
     for i in range(10):
-        env.pause_physics()
-        _, pose = env.set_random_pose("drone0")
-        poseStamped = PoseStamped()
-        poseStamped.pose = pose
-        poseStamped.header.frame_id = "earth"
-        env.drone_interface_list[
-            0
-        ].motion_ref_handler.position.send_position_command_with_yaw_angle(
-            pose=poseStamped,
-            twist_limit=0.0,
-            pose_frame_id="earth",
-            twist_frame_id="earth",
-            yaw_angle=0.0,
-        )
-        print(env.buf_obs)
-        env.unpause_physics()
+        env.reset()
+        time.sleep(1.0)
     rclpy.shutdown()
