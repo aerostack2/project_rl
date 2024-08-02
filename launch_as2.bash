@@ -44,23 +44,13 @@ swarm=${swarm:="false"}
 record_rosbag=${record_rosbag:="false"}
 launch_keyboard_teleop=${launch_keyboard_teleop:="false"}
 
+simulation_config="assets/worlds/world1.json" 
 if [[ ${swarm} == "true" ]]; then
   simulation_config="sim_config/world_swarm.json"
-  num_drones=3
-else
-  simulation_config="assets/worlds/world1.json" 
-  num_drones=1
 fi
 
-
-# Generate the list of drone namespaces
-drone_ns=()
-for ((i=0; i<${num_drones}; i++)); do
-  drone_ns+=("$drone_namespace$i")
-done
-
 drones=$(python utils/get_drones.py ${simulation_config} --sep ' ')
-for drone in ${drones[@]}; do
+for drone in "${drones[@]}"; do
   tmuxinator start -n ${drone} -p tmuxinator/session.yml \
     drone_namespace=${drone} \
     simulation_config=${simulation_config} &
@@ -84,5 +74,5 @@ tmuxinator start -n gazebo -p tmuxinator/gazebo.yml \
   simulation_config=${simulation_config} &
 wait
 
-# Attach to tmux session ${drone_ns[@]}, window mission
+# Attach to tmux session ${drones[@]}, window mission
 tmux attach-session -t ${drones[0]}:mission
