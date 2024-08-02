@@ -2,19 +2,14 @@
 
 usage() {
     echo "  options:"
-    echo "      -b: launch behavior tree"
     echo "      -m: multi agent"
     echo "      -r: record rosbag"
     echo "      -t: launch keyboard teleoperation"
-    echo "      -n: drone namespace, default is drone0"
 }
 
 # Arg parser
-while getopts "bmrtn" opt; do
+while getopts "mrt" opt; do
   case ${opt} in
-    b )
-      behavior_tree="true"
-      ;;
     m )
       swarm="true"
       ;;
@@ -23,9 +18,6 @@ while getopts "bmrtn" opt; do
       ;;
     t )
       launch_keyboard_teleop="true"
-      ;;
-    n )
-      drone_namespace="${OPTARG}"
       ;;
     \? )
       echo "Invalid option: -$OPTARG" >&2
@@ -42,19 +34,15 @@ while getopts "bmrtn" opt; do
   esac
 done
 
-source utils/tools.bash
-
 # Shift optional args
 shift $((OPTIND -1))
 
 export GZ_SIM_RESOURCE_PATH=$PWD/assets/worlds:$PWD/assets/models:$GZ_SIM_RESOURCE_PATH
 
 ## DEFAULTS
-behavior_tree=${behavior_tree:="false"}
 swarm=${swarm:="false"}
 record_rosbag=${record_rosbag:="false"}
 launch_keyboard_teleop=${launch_keyboard_teleop:="false"}
-drone_namespace=${drone_namespace:="drone"}
 
 if [[ ${swarm} == "true" ]]; then
   simulation_config="sim_config/world_swarm.json"
@@ -73,7 +61,7 @@ done
 
 for ns in "${drone_ns[@]}"
 do
-  tmuxinator start -n ${ns} -p tmuxinator/session.yml drone_namespace=${ns} simulation_config=${simulation_config} behavior_tree=${behavior_tree} &
+  tmuxinator start -n ${ns} -p tmuxinator/session.yml drone_namespace=${ns} simulation_config=${simulation_config} &
   wait
 done
 

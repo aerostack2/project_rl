@@ -1,10 +1,7 @@
-# ~/.tmuxinator/project_crazyflie_basic.yml
-
 <%
 # Input parameters
 drone_namespace     = @settings["drone_namespace"]
 simulation_config   = @settings["simulation_config"]
-use_behavior_tree   = @settings["behavior_tree"] == "true"
 
 # Other parameters
 behavior_type       = "position"
@@ -24,7 +21,6 @@ windows:
       panes:
         - ros2 launch as2_platform_gazebo platform_gazebo_launch.py
             namespace:=<%= drone_namespace %>
-            use_sim_time:=true
             simulation_config_file:=<%= simulation_config %>
             platform_config_file:=sim_config/config_file.yaml
   - state_estimator:
@@ -32,14 +28,12 @@ windows:
       panes:
         - ros2 launch as2_state_estimator state_estimator_launch.py
             namespace:=<%= drone_namespace %>
-            use_sim_time:=true
             config_file:=sim_config/config_file.yaml
   - controller:
       layout:
       panes:
         - ros2 launch as2_motion_controller controller_launch.py
             namespace:=<%= drone_namespace %>
-            use_sim_time:=true
             config_file:=sim_config/config_file.yaml
             plugin_name:=pid_speed_controller
             plugin_config_file:=sim_config/pid_speed_controller.yaml   
@@ -48,15 +42,8 @@ windows:
       panes:
         - ros2 launch as2_behaviors_motion motion_behaviors_launch.py
             namespace:=<%= drone_namespace %>
-            use_sim_time:=true
             config_file:=sim_config/config_file.yaml
   - mission:
       layout:
       panes:
-        <%- if use_behavior_tree %>
-        - ros2 launch as2_behavior_tree behavior_trees.launch.py
-            drone_id:=<%= drone_namespace %>
-            use_sim_time:=true
-            tree:=./trees/square.xml
-        <%- end %>
         - echo Run here the mission
