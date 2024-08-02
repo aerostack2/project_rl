@@ -59,24 +59,30 @@ for ((i=0; i<${num_drones}; i++)); do
   drone_ns+=("$drone_namespace$i")
 done
 
-for ns in "${drone_ns[@]}"
-do
-  tmuxinator start -n ${ns} -p tmuxinator/session.yml drone_namespace=${ns} simulation_config=${simulation_config} &
+drones=$(python utils/get_drones.py ${simulation_config} --sep ' ')
+for drone in ${drones[@]}; do
+  tmuxinator start -n ${drone} -p tmuxinator/session.yml \
+    drone_namespace=${drone} \
+    simulation_config=${simulation_config} &
   wait
 done
 
 if [[ ${record_rosbag} == "true" ]]; then
-  tmuxinator start -n rosbag -p tmuxinator/rosbag.yml drone_namespace=$(list_to_string "${drone_ns[@]}") &
+  tmuxinator start -n rosbag -p tmuxinator/rosbag.yml \
+    drone_namespace=$(python utils/get_drones.py ${simulation_config}) &
   wait
 fi
 
 if [[ ${launch_keyboard_teleop} == "true" ]]; then
-  tmuxinator start -n keyboard_teleop -p tmuxinator/keyboard_teleop.yml simulation=true drone_namespace=$(list_to_string "${drone_ns[@]}") &
+  tmuxinator start -n keyboard_teleop -p tmuxinator/keyboard_teleop.yml \
+    simulation=true \
+    drone_namespace=$(python utils/get_drones.py ${simulation_config} --sep ",") &
   wait
 fi
 
-tmuxinator start -n gazebo -p tmuxinator/gazebo.yml simulation_config=${simulation_config} &
+tmuxinator start -n gazebo -p tmuxinator/gazebo.yml \
+  simulation_config=${simulation_config} &
 wait
 
 # Attach to tmux session ${drone_ns[@]}, window mission
-tmux attach-session -t ${drone_ns[0]}:mission
+tmux attach-session -t ${drones[0]}:mission
