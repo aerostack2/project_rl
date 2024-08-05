@@ -3,6 +3,7 @@
 <%
 # Input parameters
 simulation_config = @settings["simulation_config"]
+display_rviz = @settings["display_rviz"] == "true"
 
 # Other parameters
 use_sim_time      = true
@@ -19,3 +20,6 @@ windows:
         - ros2 launch as2_gazebo_assets launch_simulation.py
           use_sim_time:=<%= use_sim_time %>
           simulation_config_file:=<%= simulation_config %>
+        <% if display_rviz %>
+        - rviz2 -d assets/rviz/one_drone.rviz
+        <% end %>

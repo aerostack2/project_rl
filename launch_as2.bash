@@ -40,6 +40,7 @@ shift $((OPTIND -1))
 export GZ_SIM_RESOURCE_PATH=$PWD/assets/worlds:$PWD/assets/models:$GZ_SIM_RESOURCE_PATH
 
 ## DEFAULTS
+display_rviz=true
 swarm=${swarm:="false"}
 record_rosbag=${record_rosbag:="false"}
 launch_keyboard_teleop=${launch_keyboard_teleop:="false"}
@@ -71,7 +72,8 @@ if [[ ${launch_keyboard_teleop} == "true" ]]; then
 fi
 
 tmuxinator start -n gazebo -p tmuxinator/gazebo.yml \
-  simulation_config=${simulation_config} &
+  simulation_config=${simulation_config} \
+  display_rviz=${display_rviz} &
 wait
 
 # Attach to tmux session ${drones[@]}, window mission
