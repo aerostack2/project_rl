@@ -9,9 +9,9 @@
             "flight_time": 60,
             "payload": [
                 {
-                    "model_type": "multi_ranger",
+                    "model_type": "planar_lidar",
                     "model_name": "lidar",
-                    "xyz": [0, 0, 0]
+                    "xyz": [0, 0, 0.1]
                 }
             ]
         }
