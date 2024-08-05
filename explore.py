@@ -120,18 +120,18 @@ if __name__ == '__main__':
     scouts: list[Explorer] = []
     scouts.append(Explorer(drone_id="drone0",
                   verbose=False, use_sim_time=True))
-    scouts.append(Explorer(drone_id="drone1",
-                  verbose=False, use_sim_time=True))
-    scouts.append(Explorer(drone_id="drone2",
-                  verbose=False, use_sim_time=True))
-    scouts.append(Explorer(drone_id="drone3",
-                  verbose=False, use_sim_time=True))
-    scouts.append(Explorer(drone_id="drone4",
-                  verbose=False, use_sim_time=True))
-    scouts.append(Explorer(drone_id="drone5",
-                  verbose=False, use_sim_time=True))
-    scouts.append(Explorer(drone_id="drone6",
-                  verbose=False, use_sim_time=True))
+    # scouts.append(Explorer(drone_id="drone1",
+    #               verbose=False, use_sim_time=True))
+    # scouts.append(Explorer(drone_id="drone2",
+    #               verbose=False, use_sim_time=True))
+    # scouts.append(Explorer(drone_id="drone3",
+    #               verbose=False, use_sim_time=True))
+    # scouts.append(Explorer(drone_id="drone4",
+    #               verbose=False, use_sim_time=True))
+    # scouts.append(Explorer(drone_id="drone5",
+    #               verbose=False, use_sim_time=True))
+    # scouts.append(Explorer(drone_id="drone6",
+    #               verbose=False, use_sim_time=True))
 
     sleep(5)
     # Only keep connected drones
