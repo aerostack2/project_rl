@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <sdf version="1.9">
-    <model name="planar_lidar">
-        <link name="planar_lidar">
+    <model name="lidar_fov">
+        <link name="lidar_fov">
             <visual name='visual'>
                 <geometry>
                     <cylinder>
