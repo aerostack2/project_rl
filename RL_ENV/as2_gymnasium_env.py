@@ -202,20 +202,21 @@ if __name__ == "__main__":
     env = AS2GymnasiumEnv(world_name="world1", world_size=10,
                           grid_size=200, min_distance=1.0, num_envs=1)
     print("Start mission")
+    #### ARM OFFBOARD #####
+    print("Arm")
+    env.drone_interface_list[0].offboard()
+    time.sleep(1.0)
+    print("Offboard")
+    env.drone_interface_list[0].arm()
+    time.sleep(1.0)
 
-    ##### ARM OFFBOARD #####
-    # print("Arm")
-    # env.drone_interface_list[0].offboard()
-    # time.sleep(1.0)
-    # print("Offboard")
-    # env.drone_interface_list[0].arm()
-    # time.sleep(1.0)
-
-    # ##### TAKE OFF #####
-    # print("Take Off")
-    # env.drone_interface_list[0].takeoff(1.0, speed=1.0)
-    # time.sleep(1.0)
-    # for i in range(10):
-    #     env.reset()
-    #     time.sleep(1.0)
-    # rclpy.shutdown()
+    ##### TAKE OFF #####
+    print("Take Off")
+    env.drone_interface_list[0].takeoff(1.0, speed=1.0)
+    time.sleep(1.0)
+    for i in range(10):
+        env.reset()
+        time.sleep(1.0)
+        env.observation_manager.show_image_with_frontiers()
+        time.sleep(2.0)
+    rclpy.shutdown()

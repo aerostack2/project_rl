@@ -11,6 +11,7 @@ from grid_map_msgs.msg import GridMap
 from geometry_msgs.msg import PoseStamped
 import cv2
 from rclpy.qos import qos_profile_sensor_data
+from frontiers import get_frontiers, paint_frontiers
 
 
 class Observation:
@@ -87,16 +88,28 @@ class Observation:
         self.grid_matrix = matrix[np.newaxis, :, :]  # Add batch dimension
         # if you want to show grid uncomment the following line
 
-        # self.show_image(self.grid_matrix)
+    def show_image_with_frontiers(self):
+        image = self.process_image(self.grid_matrix)
+        centroids, frontiers = get_frontiers(image)
+        new_img = paint_frontiers(image, frontiers, centroids)
+        cv2.imshow('frontiers', new_img)
+        cv2.waitKey(1)
 
-    def show_image(self, image_matrix: np.ndarray):
+    def save_image(self, path: str):
+        image = self.process_image(self.grid_matrix)
+
+        # Save the image using OpenCV
+        cv2.imwrite(path, image)
+        cv2.waitKey(1)
+
+    def process_image(self, image_matrix: np.ndarray):
         image_matrix = image_matrix[0]
-        image = np.zeros((image_matrix.shape[0], image_matrix.shape[1], 3), dtype=np.uint8)
+        image = np.zeros((image_matrix.shape[0], image_matrix.shape[1], 1), dtype=np.uint8)
 
         color_map = {
-            0: [255, 255, 255],  # White
-            1: [0, 0, 0],       # Black
-            2: [128, 128, 128]  # Grey
+            0: [255],  # White
+            1: [0],       # Black
+            2: [128]  # Grey
         }
 
         # Map the matrix values to the corresponding colors
@@ -104,6 +117,4 @@ class Observation:
             for j in range(image_matrix.shape[0]):
                 image[i, j] = color_map[image_matrix[i, j]]
 
-        # Display the image using OpenCV
-        cv2.imshow('Image', image)
-        cv2.waitKey(1)
+        return image
