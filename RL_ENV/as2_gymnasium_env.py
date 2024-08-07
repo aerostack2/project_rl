@@ -36,7 +36,6 @@ class AS2GymnasiumEnv(VecEnv):
             DroneInterfaceTeleop(drone_id=f"drone{n}", use_sim_time=True)
             for n in range(num_envs)
         ]
-
         self.set_pose_client = self.drone_interface_list[0].create_client(
             SetPoseWithID, f"/world/{world_name}/set_pose"
         )
@@ -200,23 +199,23 @@ class AS2GymnasiumEnv(VecEnv):
 
 if __name__ == "__main__":
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=3,
+    env = AS2GymnasiumEnv(world_name="world1", world_size=10,
                           grid_size=200, min_distance=1.0, num_envs=1)
     print("Start mission")
 
     ##### ARM OFFBOARD #####
-    print("Arm")
-    env.drone_interface_list[0].offboard()
-    time.sleep(1.0)
-    print("Offboard")
-    env.drone_interface_list[0].arm()
-    time.sleep(1.0)
+    # print("Arm")
+    # env.drone_interface_list[0].offboard()
+    # time.sleep(1.0)
+    # print("Offboard")
+    # env.drone_interface_list[0].arm()
+    # time.sleep(1.0)
 
-    ##### TAKE OFF #####
-    print("Take Off")
-    env.drone_interface_list[0].takeoff(1.0, speed=1.0)
-    time.sleep(1.0)
-    for i in range(10):
-        env.reset()
-        time.sleep(1.0)
-    rclpy.shutdown()
+    # ##### TAKE OFF #####
+    # print("Take Off")
+    # env.drone_interface_list[0].takeoff(1.0, speed=1.0)
+    # time.sleep(1.0)
+    # for i in range(10):
+    #     env.reset()
+    #     time.sleep(1.0)
+    # rclpy.shutdown()
