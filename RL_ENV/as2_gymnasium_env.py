@@ -3,6 +3,7 @@ from as2_python_api.drone_interface_teleop import DroneInterfaceTeleop
 from as2_msgs.srv import SetPoseWithID
 from ros_gz_interfaces.srv import ControlWorld
 from geometry_msgs.msg import PoseStamped, Pose
+from std_srvs.srv import SetBool
 
 import gymnasium as gym
 
@@ -41,6 +42,10 @@ class AS2GymnasiumEnv(VecEnv):
         )
         self.world_control_client = self.drone_interface_list[0].create_client(
             ControlWorld, f"/world/{world_name}/control"
+        )
+
+        self.activate_scan_srv = self.drone_interface_list[0].create_client(
+            SetBool, f"{self.drone_interface_list[0].get_namespace()}/activate_scan_to_occ_grid"
         )
 
         self.render_mode = []
@@ -115,19 +120,21 @@ class AS2GymnasiumEnv(VecEnv):
 
     def reset(self) -> VecEnvObs:
         for idx, drone in enumerate(self.drone_interface_list):
+            self.activate_scan_srv.call(SetBool.Request(data=False))
             self.pause_physics()
             _, pose = self.set_random_pose(drone.drone_id)
             poseStamped = PoseStamped()
             poseStamped.pose = pose
             poseStamped.header.frame_id = "earth"
-            drone.motion_ref_handler.position.send_position_command_with_yaw_angle(
+            drone.motion_ref_handler.position.send_position_command_with_yaw_speed(
                 pose=poseStamped,
                 twist_limit=0.0,
                 pose_frame_id="earth",
                 twist_frame_id="earth",
-                yaw_angle=0.0,
+                yaw_speed=0.0,
             )
             self.unpause_physics()
+            self.activate_scan_srv.call(SetBool.Request(data=True))
             # rotate the drone to gather lidar data
             # obs = self._get_obs(idx)
             # self._save_obs(obs, idx)
