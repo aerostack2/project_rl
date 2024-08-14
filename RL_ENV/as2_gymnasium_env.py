@@ -9,13 +9,7 @@ import gymnasium as gym
 
 from stable_baselines3.common.vec_env.base_vec_env import VecEnvIndices, VecEnvObs
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv
-from stable_baselines3.common.vec_env.util import (
-    copy_obs_dict,
-    dict_to_obs,
-    obs_space_info,
-)
 
-from collections import OrderedDict
 from typing import Any, List, Type
 import math
 import numpy as np
@@ -27,6 +21,7 @@ import xml.etree.ElementTree as ET
 
 from observation import Observation
 from action import Action
+from frontiers import get_frontiers, paint_frontiers
 
 
 class AS2GymnasiumEnv(VecEnv):
@@ -60,7 +55,7 @@ class AS2GymnasiumEnv(VecEnv):
         observation_space = self.observation_manager.observation_space
 
         # Environment action
-        self.action_manager = Action()
+        self.action_manager = Action(self.drone_interface_list)
         action_space = self.action_manager.action_space
 
         super().__init__(num_envs, observation_space, action_space)
@@ -118,6 +113,21 @@ class AS2GymnasiumEnv(VecEnv):
         # Return success and position
         return set_model_pose_res.success, set_model_pose_req.pose.pose
 
+    def set_pose(self, model_name, x, y) -> tuple[bool, Pose]:
+        set_model_pose_req = SetPoseWithID.Request()
+        set_model_pose_req.pose.id = model_name
+        set_model_pose_req.pose.pose.position.x = x
+        set_model_pose_req.pose.pose.position.y = y
+        set_model_pose_req.pose.pose.position.z = 1.0
+        set_model_pose_req.pose.pose.orientation.x = 0.0
+        set_model_pose_req.pose.pose.orientation.y = 0.0
+        set_model_pose_req.pose.pose.orientation.z = 0.0
+        set_model_pose_req.pose.pose.orientation.w = 1.0
+
+        set_model_pose_res = self.set_pose_client.call(set_model_pose_req)
+        # Return success and position
+        return set_model_pose_res.success, set_model_pose_req.pose.pose
+
     def reset(self) -> VecEnvObs:
         for idx, drone in enumerate(self.drone_interface_list):
             self.activate_scan_srv.call(SetBool.Request(data=False))
@@ -136,14 +146,42 @@ class AS2GymnasiumEnv(VecEnv):
             self.unpause_physics()
             self.activate_scan_srv.call(SetBool.Request(data=True))
             # rotate the drone to gather lidar data
-            # obs = self._get_obs(idx)
-            # self._save_obs(obs, idx)
+            frontiers = self.observation_manager.get_frontiers(idx)
+            obs = self._get_obs(idx)
+            self._save_obs(obs, idx)
+        # image = self.observation_manager.process_image(self.observation_manager.grid_matrix)
+        # centroids, frontiers = get_frontiers(image)
+        # print('centroids:', centroids)
         return self._obs_from_buf()
 
     def step_async(self, actions: np.ndarray) -> None:
-        self.actions = actions
+        self.action_manager.actions = actions
 
     def step_wait(self) -> None:
+        for idx, drone in enumerate(self.drone_interface_list):
+            self.action_manager.actions = self.action_manager.generate_random_action()
+            frontier = self.action_manager.take_action(self.observation_manager.frontiers, idx)
+
+            self.activate_scan_srv.call(SetBool.Request(data=False))
+            self.pause_physics()
+            self.set_pose(drone.drone_id, frontier[0], frontier[1])
+            poseStamped = PoseStamped()
+            poseStamped.pose.position.x = frontier[0]
+            poseStamped.pose.position.y = frontier[1]
+            poseStamped.pose.position.z = 1.0
+            poseStamped.header.frame_id = "earth"
+            self.drone_interface_list[idx].motion_ref_handler.position.send_position_command_with_yaw_speed(
+                pose=poseStamped,
+                twist_limit=0.0,
+                pose_frame_id="earth",
+                twist_frame_id="earth",
+                yaw_speed=0.0,
+            )
+            self.unpause_physics()
+            self.activate_scan_srv.call(SetBool.Request(data=True))
+            frontiers = self.observation_manager.get_frontiers(idx)
+            obs = self._get_obs(idx)
+            self._save_obs(obs, idx)
         return
 
     def close(self):
@@ -221,9 +259,12 @@ if __name__ == "__main__":
     print("Take Off")
     env.drone_interface_list[0].takeoff(1.0, speed=1.0)
     time.sleep(1.0)
+
+    env.reset()
+    time.sleep(1.0)
     for i in range(10):
-        env.reset()
+        env.step_wait()
         time.sleep(1.0)
-        env.observation_manager.show_image_with_frontiers()
-        time.sleep(2.0)
+        # env.observation_manager.show_image_with_frontiers()
+        # time.sleep(2.0)
     rclpy.shutdown()

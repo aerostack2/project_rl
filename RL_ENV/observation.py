@@ -8,10 +8,9 @@ from stable_baselines3.common.vec_env.util import (
 )
 from stable_baselines3.common.vec_env.base_vec_env import VecEnvObs
 from grid_map_msgs.msg import GridMap
-from geometry_msgs.msg import PoseStamped
 import cv2
 from rclpy.qos import qos_profile_sensor_data
-from frontiers import get_frontiers, paint_frontiers
+from as2_msgs.srv import AllocateFrontier, GetFrontiers
 
 
 class Observation:
@@ -41,7 +40,15 @@ class Observation:
         self.grid_map_sub = self.drone_interface_list[0].create_subscription(
             GridMap, "/map_server/grid_map", self.grid_map_callback, qos_profile_sensor_data
         )
+        self.allocate_frontiers_srv = self.drone_interface_list[0].create_client(
+            AllocateFrontier, "/allocate_frontier"
+        )
+        self.get_frontiers_srv = self.drone_interface_list[0].create_client(
+            GetFrontiers, "/get_frontiers"
+        )
         self.grid_matrix = np.zeros((1, grid_size, grid_size), dtype=np.uint8)
+
+        self.frontiers = []
 
     def _obs_from_buf(self) -> VecEnvObs:
         return dict_to_obs(self.observation_space, copy_obs_dict(self.buf_obs))
@@ -88,12 +95,38 @@ class Observation:
         self.grid_matrix = matrix[np.newaxis, :, :]  # Add batch dimension
         # if you want to show grid uncomment the following line
 
-    def show_image_with_frontiers(self):
-        image = self.process_image(self.grid_matrix)
-        centroids, frontiers = get_frontiers(image)
-        new_img = paint_frontiers(image, frontiers, centroids)
-        cv2.imshow('frontiers', new_img)
-        cv2.waitKey(1)
+    # def show_image_with_frontiers(self):
+    #     image = self.process_image(self.grid_matrix)
+    #     centroids, frontiers = get_frontiers(image)
+    #     new_img = paint_frontiers(image, frontiers, centroids)
+    #     cv2.imshow('frontiers', new_img)
+    #     cv2.waitKey(1)
+
+    def get_frontiers(self, env_id):
+        # Call the service to get the frontiers
+        allocate_frontier_req = AllocateFrontier.Request()
+        allocate_frontier_req.explorer_id = f"drone{env_id}"
+        allocate_frontier_req.explorer_pose.header.frame_id = "earth"
+        allocate_frontier_req.explorer_pose.header.stamp = self.drone_interface_list[env_id].get_clock(
+        ).now().to_msg()
+        allocate_frontier_req.explorer_pose.pose.position.x = self.drone_interface_list[env_id].position[0]
+        allocate_frontier_req.explorer_pose.pose.position.y = self.drone_interface_list[env_id].position[1]
+        allocate_frontier_req.explorer_pose.pose.position.z = 1.0
+        self.allocate_frontiers_srv.call(allocate_frontier_req)
+
+        get_frontiers_req = GetFrontiers.Request()
+        get_frontiers_req.explorer_id = f"drone{env_id}"
+        get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
+        frontiers = []
+        for frontier in get_frontiers_res.frontiers:
+            frontiers.append([frontier.point.x, frontier.point.y])
+        self.frontiers = self.order_frontiers(frontiers)
+        return frontiers
+
+    def order_frontiers(self, frontiers):
+        # Order frontiers from left to right and top to bottom
+        sorted_frontiers = sorted(frontiers, key=lambda point: (-point[1], -point[0]))
+        return sorted_frontiers
 
     def save_image(self, path: str):
         image = self.process_image(self.grid_matrix)

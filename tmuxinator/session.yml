@@ -58,14 +58,10 @@ windows:
         - ros2 launch as2_path_planning frontier_allocator.launch.py
             use_sim_time:=true
             config_file:=sim_config/exploration.yaml
-  - explorer:
-      layout: even-vertical
+  - planner:
+      layout:
       panes:
         - ros2 launch as2_path_planning path_planner.launch.py
-            namespace:=<%= drone_namespace %>
-            use_sim_time:=true
-            config_file:=sim_config/exploration.yaml
-        - ros2 launch as2_path_planning explorer.launch.py
             namespace:=<%= drone_namespace %>
             use_sim_time:=true
             config_file:=sim_config/exploration.yaml
