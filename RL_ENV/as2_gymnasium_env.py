@@ -3,12 +3,15 @@ from as2_python_api.drone_interface_teleop import DroneInterfaceTeleop
 from as2_msgs.srv import SetPoseWithID
 from ros_gz_interfaces.srv import ControlWorld
 from geometry_msgs.msg import PoseStamped, Pose
-from std_srvs.srv import SetBool
+from std_srvs.srv import SetBool, Empty
 
 import gymnasium as gym
 
 from stable_baselines3.common.vec_env.base_vec_env import VecEnvIndices, VecEnvObs
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv
+from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
 
 from typing import Any, List, Type
 import math
@@ -16,6 +19,7 @@ import numpy as np
 from transforms3d.euler import euler2quat
 import random
 import time
+from copy import deepcopy
 
 import xml.etree.ElementTree as ET
 
@@ -25,8 +29,8 @@ from frontiers import get_frontiers, paint_frontiers
 
 
 class AS2GymnasiumEnv(VecEnv):
-    def __init__(self, world_name, world_size, grid_size, min_distance, num_envs) -> None:
 
+    def __init__(self, world_name, world_size, grid_size, min_distance, num_envs) -> None:
         # ROS 2 related stuff
         self.drone_interface_list = [
             DroneInterfaceTeleop(drone_id=f"drone{n}", use_sim_time=True)
@@ -41,6 +45,10 @@ class AS2GymnasiumEnv(VecEnv):
 
         self.activate_scan_srv = self.drone_interface_list[0].create_client(
             SetBool, f"{self.drone_interface_list[0].get_namespace()}/activate_scan_to_occ_grid"
+        )
+
+        self.clear_map_srv = self.drone_interface_list[0].create_client(
+            Empty, "/map_server/clear_map"
         )
 
         self.render_mode = []
@@ -128,30 +136,34 @@ class AS2GymnasiumEnv(VecEnv):
         # Return success and position
         return set_model_pose_res.success, set_model_pose_req.pose.pose
 
-    def reset(self) -> VecEnvObs:
-        for idx, drone in enumerate(self.drone_interface_list):
-            self.activate_scan_srv.call(SetBool.Request(data=False))
-            self.pause_physics()
-            _, pose = self.set_random_pose(drone.drone_id)
-            poseStamped = PoseStamped()
-            poseStamped.pose = pose
-            poseStamped.header.frame_id = "earth"
-            drone.motion_ref_handler.position.send_position_command_with_yaw_speed(
-                pose=poseStamped,
-                twist_limit=0.0,
-                pose_frame_id="earth",
-                twist_frame_id="earth",
-                yaw_speed=0.0,
-            )
-            self.unpause_physics()
-            self.activate_scan_srv.call(SetBool.Request(data=True))
-            # rotate the drone to gather lidar data
-            frontiers = self.observation_manager.get_frontiers(idx)
-            obs = self._get_obs(idx)
-            self._save_obs(obs, idx)
-        # image = self.observation_manager.process_image(self.observation_manager.grid_matrix)
-        # centroids, frontiers = get_frontiers(image)
-        # print('centroids:', centroids)
+    def reset_single_env(self, env_idx):
+        self.activate_scan_srv.call(SetBool.Request(data=False))
+        self.pause_physics()
+        self.clear_map_srv.call(Empty.Request())
+        print("Resetting drone", self.drone_interface_list[env_idx].drone_id)
+        _, pose = self.set_random_pose(self.drone_interface_list[env_idx].drone_id)
+        poseStamped = PoseStamped()
+        poseStamped.pose = pose
+        poseStamped.header.frame_id = "earth"
+        self.drone_interface_list[env_idx].motion_ref_handler.position.send_position_command_with_yaw_speed(
+            pose=poseStamped,
+            twist_limit=0.0,
+            pose_frame_id="earth",
+            twist_frame_id="earth",
+            yaw_speed=0.0,
+        )
+        print("Unpausing physics")
+        self.unpause_physics()
+        self.activate_scan_srv.call(SetBool.Request(data=True))
+
+        frontiers = self.observation_manager.get_frontiers(env_idx)
+        obs = self._get_obs(env_idx)
+        self._save_obs(env_idx, obs)
+        return obs
+
+    def reset(self, seed=None, **kwargs) -> VecEnvObs:
+        for idx, _ in enumerate(self.drone_interface_list):
+            self.reset_single_env(idx)
         return self._obs_from_buf()
 
     def step_async(self, actions: np.ndarray) -> None:
@@ -159,8 +171,9 @@ class AS2GymnasiumEnv(VecEnv):
 
     def step_wait(self) -> None:
         for idx, drone in enumerate(self.drone_interface_list):
-            self.action_manager.actions = self.action_manager.generate_random_action()
-            frontier = self.action_manager.take_action(self.observation_manager.frontiers, idx)
+            # self.action_manager.actions = self.action_manager.generate_random_action()
+            frontier, path_length = self.action_manager.take_action(
+                self.observation_manager.frontiers, idx)
 
             self.activate_scan_srv.call(SetBool.Request(data=False))
             self.pause_physics()
@@ -181,8 +194,16 @@ class AS2GymnasiumEnv(VecEnv):
             self.activate_scan_srv.call(SetBool.Request(data=True))
             frontiers = self.observation_manager.get_frontiers(idx)
             obs = self._get_obs(idx)
-            self._save_obs(obs, idx)
-        return
+            self._save_obs(idx, obs)
+            self.buf_infos[idx] = {}  # TODO: Add info
+            self.buf_rews[idx] = -path_length * 0.1
+
+            if len(frontiers) == 0:  # No frontiers left, episode ends
+                self.buf_dones[idx] = True
+                self.buf_rews[idx] = 100.0
+                self.reset_single_env(idx)
+
+        return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
     def close(self):
         return
@@ -216,7 +237,7 @@ class AS2GymnasiumEnv(VecEnv):
         # return all observations from all environments
         return self.observation_manager._obs_from_buf()
 
-    def _save_obs(self, obs: VecEnvObs, env_id):
+    def _save_obs(self, env_id, obs: VecEnvObs):
         # save the observation for the specified environment
         self.observation_manager._save_obs(obs, env_id)
 
@@ -261,10 +282,9 @@ if __name__ == "__main__":
     time.sleep(1.0)
 
     env.reset()
-    time.sleep(1.0)
     for i in range(10):
         env.step_wait()
-        time.sleep(1.0)
+        # print('number of frontiers:', len(env.observation_manager.frontiers))
         # env.observation_manager.show_image_with_frontiers()
         # time.sleep(2.0)
     rclpy.shutdown()

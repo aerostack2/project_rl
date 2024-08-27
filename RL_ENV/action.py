@@ -21,7 +21,7 @@ class PathActionClient:
         goal_msg.point.header.frame_id = "earth"
         self._action_client.wait_for_server()
         result = self._action_client.send_goal(goal_msg)
-        print('result:', result.result.success)
+        return result.result.success, result.result.path_length.data
 
 
 class Action:
@@ -37,18 +37,18 @@ class Action:
                 )
             )
 
-    def take_action(self, frontier_list, env_id):
+    def take_action(self, frontier_list, env_id) -> tuple:
         action = self.actions[env_id]
         frontier = self.select_frontier(frontier_list, action)
 
-        self.generate_path_action_client_list[env_id].send_goal(frontier)
+        result, path_length = self.generate_path_action_client_list[env_id].send_goal(frontier)
 
-        return frontier
+        return frontier, path_length
 
     def generate_random_action(self):
-        return np.array([random.uniform(0, 1)])
+        return [np.array([random.uniform(0, 1)])]
 
     def select_frontier(self, frontier_list, action):
-        index = int(round(action * (len(frontier_list) - 1)))
+        index = int(round(action[0] * (len(frontier_list) - 1)))
 
         return frontier_list[index]

@@ -11,6 +11,7 @@ from grid_map_msgs.msg import GridMap
 import cv2
 from rclpy.qos import qos_profile_sensor_data
 from as2_msgs.srv import AllocateFrontier, GetFrontiers
+from frontiers import get_frontiers, paint_frontiers
 
 
 class Observation:
@@ -19,7 +20,7 @@ class Observation:
         self.observation_space = Dict(
             {
                 "image": Box(
-                    low=0, high=2, shape=(1, grid_size, grid_size), dtype=np.uint8
+                    low=0, high=3, shape=(1, grid_size, grid_size), dtype=np.uint8
                 ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown
                 "position": Box(low=0, high=grid_size - 1, shape=(2,), dtype=np.int32),
                 # Position of the drone in the grid
@@ -63,6 +64,8 @@ class Observation:
     # TODO: Return observation for a specific environment
     def _get_obs(self, env_id) -> VecEnvObs:
         position = self.convert_pose_to_grid_position(self.drone_interface_list[env_id].position)
+        self.put_frontiers_in_grid()
+
         obs = {"image": self.grid_matrix, "position": position}
         return obs
 
@@ -74,6 +77,8 @@ class Observation:
 
     def grid_map_callback(self, msg: GridMap):
         # Get the grid map from the message and save it in the grid_matrix variable
+        if len(msg.data) == 0:
+            return
         data = msg.data
         # Initialize the matrix with zeros
         matrix = np.zeros((self.grid_size, self.grid_size), dtype=np.float32)
@@ -93,14 +98,27 @@ class Observation:
         # Convert to uint8 and reshape
         matrix = matrix.astype(np.uint8)
         self.grid_matrix = matrix[np.newaxis, :, :]  # Add batch dimension
-        # if you want to show grid uncomment the following line
 
-    # def show_image_with_frontiers(self):
-    #     image = self.process_image(self.grid_matrix)
-    #     centroids, frontiers = get_frontiers(image)
-    #     new_img = paint_frontiers(image, frontiers, centroids)
-    #     cv2.imshow('frontiers', new_img)
-    #     cv2.waitKey(1)
+    def put_frontiers_in_grid(self):
+        for frontier in self.frontiers:
+            frontier_position = self.convert_pose_to_grid_position(frontier)
+            # paint a square around the frontier
+            self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3
+            self.grid_matrix[0, frontier_position[1] + 1, frontier_position[0]] = 3
+            self.grid_matrix[0, frontier_position[1] - 1, frontier_position[0]] = 3
+            self.grid_matrix[0, frontier_position[1], frontier_position[0] + 1] = 3
+            self.grid_matrix[0, frontier_position[1], frontier_position[0] - 1] = 3
+            self.grid_matrix[0, frontier_position[1] + 1, frontier_position[0] + 1] = 3
+            self.grid_matrix[0, frontier_position[1] - 1, frontier_position[0] - 1] = 3
+            self.grid_matrix[0, frontier_position[1] + 1, frontier_position[0] - 1] = 3
+            self.grid_matrix[0, frontier_position[1] - 1, frontier_position[0] + 1] = 3
+
+    def show_image_with_frontiers(self):
+        image = self.process_image(self.grid_matrix)
+        # centroids, frontiers = get_frontiers(image)
+        # new_img = paint_frontiers(image, frontiers, centroids)
+        cv2.imshow('frontiers', image)
+        cv2.waitKey(10)
 
     def get_frontiers(self, env_id):
         # Call the service to get the frontiers
@@ -141,8 +159,9 @@ class Observation:
 
         color_map = {
             0: [255],  # White
-            1: [0],       # Black
-            2: [128]  # Grey
+            1: [255],
+            2: [128],  # Grey
+            3: [0]
         }
 
         # Map the matrix values to the corresponding colors
