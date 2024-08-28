@@ -53,7 +53,7 @@ class AS2GymnasiumEnv(VecEnv):
 
         self.render_mode = []
         for _ in range(num_envs):
-            self.render_mode.append("human")
+            self.render_mode.append(["rgb_array"])
 
         self.world_size = world_size
         self.min_distance = min_distance
@@ -245,6 +245,18 @@ class AS2GymnasiumEnv(VecEnv):
         # get the observation for the specified environment
         return self.observation_manager._get_obs(env_id)
 
+    def env_is_wrapped(self, wrapper_class: Type[gym.Wrapper], indices: VecEnvIndices = None) -> List[bool]:
+        """
+        Check if environments are wrapped with a given wrapper.
+
+        :param method_name: The name of the environment method to invoke.
+        :param indices: Indices of envs whose method to call
+        :param method_args: Any positional arguments to provide in the call
+        :param method_kwargs: Any keyword arguments to provide in the call
+        :return: True if the env is wrapped, False otherwise, for each env queried.
+        """
+        return [True] * self.num_envs
+
     def parse_xml(self, filename: str) -> List[tuple[float, float]]:
         """Parse XML file and return pole positions"""
         world_tree = ET.parse(filename).getroot()
@@ -267,6 +279,7 @@ if __name__ == "__main__":
     rclpy.init()
     env = AS2GymnasiumEnv(world_name="world1", world_size=10,
                           grid_size=200, min_distance=1.0, num_envs=1)
+    env = VecMonitor(env, filename="/home/javilinos/PPO_Monitor")
     print("Start mission")
     #### ARM OFFBOARD #####
     print("Arm")

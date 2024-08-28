@@ -104,14 +104,6 @@ class Observation:
             frontier_position = self.convert_pose_to_grid_position(frontier)
             # paint a square around the frontier
             self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3
-            self.grid_matrix[0, frontier_position[1] + 1, frontier_position[0]] = 3
-            self.grid_matrix[0, frontier_position[1] - 1, frontier_position[0]] = 3
-            self.grid_matrix[0, frontier_position[1], frontier_position[0] + 1] = 3
-            self.grid_matrix[0, frontier_position[1], frontier_position[0] - 1] = 3
-            self.grid_matrix[0, frontier_position[1] + 1, frontier_position[0] + 1] = 3
-            self.grid_matrix[0, frontier_position[1] - 1, frontier_position[0] - 1] = 3
-            self.grid_matrix[0, frontier_position[1] + 1, frontier_position[0] - 1] = 3
-            self.grid_matrix[0, frontier_position[1] - 1, frontier_position[0] + 1] = 3
 
     def show_image_with_frontiers(self):
         image = self.process_image(self.grid_matrix)

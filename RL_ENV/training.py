@@ -5,12 +5,13 @@ import rclpy
 import time
 import numpy as np
 
-from stable_baselines3.common.monitor import Monitor
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback, EvalCallback
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 
 from as2_gymnasium_env import AS2GymnasiumEnv
 
@@ -67,6 +68,7 @@ if __name__ == "__main__":
     rclpy.init()
     env = AS2GymnasiumEnv(world_name="world1", world_size=10,
                           grid_size=200, min_distance=1.0, num_envs=1)
+    env = VecMonitor(env)
     print("Start mission")
     #### ARM OFFBOARD #####
     print("Arm")
