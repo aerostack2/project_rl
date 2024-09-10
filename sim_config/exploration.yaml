@@ -5,9 +5,9 @@
 
         # Scan2Grid parameters
         map_resolution: 0.1
-        map_width: 200
-        map_height: 200
-        max_range_limit: 4.0
+        map_width: 100
+        map_height: 100
+        max_range_limit: 2.0
 
         # MapServer parameters
         # map_resolution: 0.1

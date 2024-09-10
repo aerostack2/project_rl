@@ -52,8 +52,8 @@ class Training:
             verbose=1,
             tensorboard_log="./tensorboard/",
             n_steps=16,
-            batch_size=16,
-            n_epochs=4,
+            batch_size=8,
+            n_epochs=10,
         )
 
         model.learn(
@@ -66,8 +66,8 @@ class Training:
 
 if __name__ == "__main__":
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=10,
-                          grid_size=200, min_distance=1.0, num_envs=1)
+    env = AS2GymnasiumEnv(world_name="world1", world_size=5,
+                          grid_size=100, min_distance=1.0, num_envs=1)
     env = VecMonitor(env)
     print("Start mission")
     #### ARM OFFBOARD #####

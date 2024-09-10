@@ -65,7 +65,7 @@ class Observation:
     def _get_obs(self, env_id) -> VecEnvObs:
         position = self.convert_pose_to_grid_position(self.drone_interface_list[env_id].position)
         self.put_frontiers_in_grid()
-
+        # self.show_image_with_frontiers()
         obs = {"image": self.grid_matrix, "position": position}
         return obs
 
@@ -151,9 +151,9 @@ class Observation:
 
         color_map = {
             0: [255],  # White
-            1: [255],
+            1: [0],
             2: [128],  # Grey
-            3: [0]
+            3: [255]
         }
 
         # Map the matrix values to the corresponding colors

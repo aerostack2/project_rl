@@ -43,7 +43,7 @@ class Action:
 
         result, path_length = self.generate_path_action_client_list[env_id].send_goal(frontier)
 
-        return frontier, path_length
+        return frontier, path_length, result
 
     def generate_random_action(self):
         return [np.array([random.uniform(0, 1)])]

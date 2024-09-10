@@ -10,8 +10,6 @@ import gymnasium as gym
 from stable_baselines3.common.vec_env.base_vec_env import VecEnvIndices, VecEnvObs
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env.dummy_vec_env import DummyVecEnv
 
 from typing import Any, List, Type
 import math
@@ -172,10 +170,10 @@ class AS2GymnasiumEnv(VecEnv):
     def step_wait(self) -> None:
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
-            frontier, path_length = self.action_manager.take_action(
+            frontier, path_length, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, idx)
 
-            self.activate_scan_srv.call(SetBool.Request(data=False))
+            # self.activate_scan_srv.call(SetBool.Request(data=False))
             self.pause_physics()
             self.set_pose(drone.drone_id, frontier[0], frontier[1])
             poseStamped = PoseStamped()
@@ -191,16 +189,21 @@ class AS2GymnasiumEnv(VecEnv):
                 yaw_speed=0.0,
             )
             self.unpause_physics()
-            self.activate_scan_srv.call(SetBool.Request(data=True))
+            # self.activate_scan_srv.call(SetBool.Request(data=True))
             frontiers = self.observation_manager.get_frontiers(idx)
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
             self.buf_infos[idx] = {}  # TODO: Add info
-            self.buf_rews[idx] = -path_length * 0.1
-
+            self.buf_rews[idx] = -path_length * 0.5
+            self.buf_dones[idx] = False
             if len(frontiers) == 0:  # No frontiers left, episode ends
                 self.buf_dones[idx] = True
                 self.buf_rews[idx] = 100.0
+                self.reset_single_env(idx)
+            if not result:
+                print("Failed to reach goal")
+                self.buf_dones[idx] = True
+                self.buf_rews[idx] = -100.0
                 self.reset_single_env(idx)
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
@@ -277,27 +280,28 @@ class AS2GymnasiumEnv(VecEnv):
 
 if __name__ == "__main__":
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=10,
-                          grid_size=200, min_distance=1.0, num_envs=1)
-    env = VecMonitor(env, filename="/home/javilinos/PPO_Monitor")
-    print("Start mission")
-    #### ARM OFFBOARD #####
-    print("Arm")
-    env.drone_interface_list[0].offboard()
-    time.sleep(1.0)
-    print("Offboard")
-    env.drone_interface_list[0].arm()
-    time.sleep(1.0)
+    env = AS2GymnasiumEnv(world_name="world1", world_size=5,
+                          grid_size=100, min_distance=1.0, num_envs=1)
+    while (True):
+        env.observation_manager._get_obs(0)
+    # print("Start mission")
+    # #### ARM OFFBOARD #####
+    # print("Arm")
+    # env.drone_interface_list[0].offboard()
+    # time.sleep(1.0)
+    # print("Offboard")
+    # env.drone_interface_list[0].arm()
+    # time.sleep(1.0)
 
-    ##### TAKE OFF #####
-    print("Take Off")
-    env.drone_interface_list[0].takeoff(1.0, speed=1.0)
-    time.sleep(1.0)
+    # ##### TAKE OFF #####
+    # print("Take Off")
+    # env.drone_interface_list[0].takeoff(1.0, speed=1.0)
+    # time.sleep(1.0)
 
-    env.reset()
-    for i in range(10):
-        env.step_wait()
-        # print('number of frontiers:', len(env.observation_manager.frontiers))
-        # env.observation_manager.show_image_with_frontiers()
-        # time.sleep(2.0)
-    rclpy.shutdown()
+    # env.reset()
+    # for i in range(10):
+    #     env.step_wait()
+    #     # print('number of frontiers:', len(env.observation_manager.frontiers))
+    #     # env.observation_manager.show_image_with_frontiers()
+    #     # time.sleep(2.0)
+    # rclpy.shutdown()
