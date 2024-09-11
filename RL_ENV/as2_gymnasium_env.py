@@ -155,6 +155,8 @@ class AS2GymnasiumEnv(VecEnv):
         self.activate_scan_srv.call(SetBool.Request(data=True))
 
         frontiers = self.observation_manager.get_frontiers(env_idx)
+        if len(frontiers) == 0:
+            return self.reset_single_env(env_idx)
         obs = self._get_obs(env_idx)
         self._save_obs(env_idx, obs)
         return obs
