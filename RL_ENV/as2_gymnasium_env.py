@@ -140,17 +140,7 @@ class AS2GymnasiumEnv(VecEnv):
         self.clear_map_srv.call(Empty.Request())
         print("Resetting drone", self.drone_interface_list[env_idx].drone_id)
         _, pose = self.set_random_pose(self.drone_interface_list[env_idx].drone_id)
-        poseStamped = PoseStamped()
-        poseStamped.pose = pose
-        poseStamped.header.frame_id = "earth"
-        self.drone_interface_list[env_idx].motion_ref_handler.position.send_position_command_with_yaw_speed(
-            pose=poseStamped,
-            twist_limit=0.0,
-            pose_frame_id="earth",
-            twist_frame_id="earth",
-            yaw_speed=0.0,
-        )
-        print("Unpausing physics")
+
         self.unpause_physics()
         self.activate_scan_srv.call(SetBool.Request(data=True))
 
@@ -175,23 +165,8 @@ class AS2GymnasiumEnv(VecEnv):
             frontier, path_length, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, idx)
 
-            # self.activate_scan_srv.call(SetBool.Request(data=False))
-            self.pause_physics()
             self.set_pose(drone.drone_id, frontier[0], frontier[1])
-            poseStamped = PoseStamped()
-            poseStamped.pose.position.x = frontier[0]
-            poseStamped.pose.position.y = frontier[1]
-            poseStamped.pose.position.z = 1.0
-            poseStamped.header.frame_id = "earth"
-            self.drone_interface_list[idx].motion_ref_handler.position.send_position_command_with_yaw_speed(
-                pose=poseStamped,
-                twist_limit=0.0,
-                pose_frame_id="earth",
-                twist_frame_id="earth",
-                yaw_speed=0.0,
-            )
-            self.unpause_physics()
-            # self.activate_scan_srv.call(SetBool.Request(data=True))
+
             frontiers = self.observation_manager.get_frontiers(idx)
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)

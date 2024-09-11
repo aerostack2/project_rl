@@ -4,6 +4,8 @@ from torch import nn
 import rclpy
 import time
 import numpy as np
+import cProfile
+import pstats
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -51,15 +53,33 @@ class Training:
             self.env,
             verbose=1,
             tensorboard_log="./tensorboard/",
-            n_steps=16,
-            batch_size=8,
+            n_steps=256,
+            batch_size=64,
             n_epochs=10,
+            learning_rate=0.003,
+            use_sde=True,
+            sde_sample_freq=8
         )
-
         model.learn(
-            total_timesteps=10000,
+            total_timesteps=30000,
             callback=self.custom_callback,
         )
+
+        ##### PROFILING #####
+
+        # with cProfile.Profile() as pr:
+            
+        #     model.learn(
+        #         total_timesteps=1,
+        #         callback=self.custom_callback,
+        #     )
+
+        # stats = pstats.Stats(pr)
+        # stats.sort_stats(pstats.SortKey.TIME)
+        # # stats.print_stats()
+        # stats.dump_stats(filename='profilings/needs_profiling_4.prof')
+
+        ######################
 
         model.save("ppo_as2_gymnasium")
 
@@ -71,17 +91,17 @@ if __name__ == "__main__":
     env = VecMonitor(env)
     print("Start mission")
     #### ARM OFFBOARD #####
-    print("Arm")
-    env.drone_interface_list[0].offboard()
-    time.sleep(1.0)
-    print("Offboard")
-    env.drone_interface_list[0].arm()
-    time.sleep(1.0)
+    # print("Arm")
+    # env.drone_interface_list[0].offboard()
+    # time.sleep(1.0)
+    # print("Offboard")
+    # env.drone_interface_list[0].arm()
+    # time.sleep(1.0)
 
-    ##### TAKE OFF #####
-    print("Take Off")
-    env.drone_interface_list[0].takeoff(1.0, speed=1.0)
-    time.sleep(1.0)
+    # ##### TAKE OFF #####
+    # print("Take Off")
+    # env.drone_interface_list[0].takeoff(1.0, speed=1.0)
+    # time.sleep(1.0)
     custom_callback = CustomCallback()
     training = Training(env, custom_callback)
     print("Training the model...")
