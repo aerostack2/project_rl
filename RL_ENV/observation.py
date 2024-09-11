@@ -41,9 +41,7 @@ class Observation:
         self.grid_map_sub = self.drone_interface_list[0].create_subscription(
             GridMap, "/map_server/grid_map", self.grid_map_callback, qos_profile_sensor_data
         )
-        self.allocate_frontiers_srv = self.drone_interface_list[0].create_client(
-            AllocateFrontier, "/allocate_frontier"
-        )
+        
         self.get_frontiers_srv = self.drone_interface_list[0].create_client(
             GetFrontiers, "/get_frontiers"
         )
@@ -114,15 +112,6 @@ class Observation:
 
     def get_frontiers(self, env_id):
         # Call the service to get the frontiers
-        allocate_frontier_req = AllocateFrontier.Request()
-        allocate_frontier_req.explorer_id = f"drone{env_id}"
-        allocate_frontier_req.explorer_pose.header.frame_id = "earth"
-        allocate_frontier_req.explorer_pose.header.stamp = self.drone_interface_list[env_id].get_clock(
-        ).now().to_msg()
-        allocate_frontier_req.explorer_pose.pose.position.x = self.drone_interface_list[env_id].position[0]
-        allocate_frontier_req.explorer_pose.pose.position.y = self.drone_interface_list[env_id].position[1]
-        allocate_frontier_req.explorer_pose.pose.position.z = 1.0
-        self.allocate_frontiers_srv.call(allocate_frontier_req)
 
         get_frontiers_req = GetFrontiers.Request()
         get_frontiers_req.explorer_id = f"drone{env_id}"
