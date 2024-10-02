@@ -2,7 +2,7 @@ import rclpy
 from as2_python_api.drone_interface_teleop import DroneInterfaceTeleop
 from as2_msgs.srv import SetPoseWithID
 from ros_gz_interfaces.srv import ControlWorld
-from geometry_msgs.msg import PoseStamped, Pose
+from geometry_msgs.msg import PoseStamped, Pose, PointStamped
 from std_srvs.srv import SetBool, Empty
 
 import gymnasium as gym
@@ -22,13 +22,13 @@ from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 from observation import Observation
-from action import Action
+from action import ActionScalarVector as Action
 from frontiers import get_frontiers, paint_frontiers
 
 
 class AS2GymnasiumEnv(VecEnv):
 
-    def __init__(self, world_name, world_size, grid_size, min_distance, num_envs) -> None:
+    def __init__(self, world_name, world_size, grid_size, min_distance, num_envs, policy_type: str) -> None:
         # ROS 2 related stuff
         self.drone_interface_list = [
             DroneInterfaceTeleop(drone_id=f"drone{n}", use_sim_time=True)
@@ -55,9 +55,11 @@ class AS2GymnasiumEnv(VecEnv):
 
         self.world_size = world_size
         self.min_distance = min_distance
+        self.grid_size = grid_size
 
         # Environment observation
-        self.observation_manager = Observation(grid_size, num_envs, self.drone_interface_list)
+        self.observation_manager = Observation(
+            grid_size, num_envs, self.drone_interface_list, policy_type)
         observation_space = self.observation_manager.observation_space
 
         # Environment action
@@ -144,7 +146,8 @@ class AS2GymnasiumEnv(VecEnv):
         self.unpause_physics()
         self.activate_scan_srv.call(SetBool.Request(data=True))
 
-        frontiers = self.observation_manager.get_frontiers(env_idx)
+        frontiers, _ = self.observation_manager.get_frontiers_and_position(
+            env_idx)
         if len(frontiers) == 0:
             return self.reset_single_env(env_idx)
         obs = self._get_obs(env_idx)
@@ -162,16 +165,21 @@ class AS2GymnasiumEnv(VecEnv):
     def step_wait(self) -> None:
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
-            frontier, path_length, result = self.action_manager.take_action(
-                self.observation_manager.frontiers, idx)
+            frontier, path_length, closest_distance, result = self.action_manager.take_action(
+                self.observation_manager.frontiers, self.world_size, idx)
+
+            distance_reward = self.world_size - \
+                (closest_distance / math.sqrt(2) * self.world_size * 2)
 
             self.set_pose(drone.drone_id, frontier[0], frontier[1])
 
-            frontiers = self.observation_manager.get_frontiers(idx)
+            frontiers, _ = self.observation_manager.get_frontiers_and_position(
+                idx)
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
             self.buf_infos[idx] = {}  # TODO: Add info
             self.buf_rews[idx] = -path_length * 0.5
+            self.buf_rews[idx] += distance_reward
             self.buf_dones[idx] = False
             if len(frontiers) == 0:  # No frontiers left, episode ends
                 self.buf_dones[idx] = True
@@ -257,8 +265,8 @@ class AS2GymnasiumEnv(VecEnv):
 
 if __name__ == "__main__":
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=5,
-                          grid_size=100, min_distance=1.0, num_envs=1)
+    env = AS2GymnasiumEnv(world_name="world1", world_size=2.5,
+                          grid_size=50, min_distance=1.0, num_envs=1)
     while (True):
         env.observation_manager._get_obs(0)
     # print("Start mission")

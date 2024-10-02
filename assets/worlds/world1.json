@@ -4,8 +4,8 @@
         {
             "model_type": "quadrotor_base",
             "model_name": "drone0",
-            "xyz": [2.6, -0.55, 0],
-            "rpy": [0, 0, 3.43],
+            "xyz": [-1.5, 2.49, 0],
+            "rpy": [0, 0, 3.92],
             "flight_time": 60,
             "payload": [
                 {

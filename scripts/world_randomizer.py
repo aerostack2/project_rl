@@ -73,7 +73,7 @@ def generate_world(world_name: str, num_world: int, num_object: int,
 
     json_template = environment.get_template("drone.json.jinja")
     sdf_template = environment.get_template("world.sdf.jinja")
-    world_size = 5
+    world_size = 2.5
 
     for i in range(num_world):
         world_name = f"{world_name}{i+1}"

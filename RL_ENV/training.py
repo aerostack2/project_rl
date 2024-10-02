@@ -6,6 +6,7 @@ import time
 import numpy as np
 import cProfile
 import pstats
+import torch as th
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -49,7 +50,7 @@ class Training:
 
     def train(self):
         model = PPO(
-            "MultiInputPolicy",
+            "MlpPolicy",
             self.env,
             verbose=1,
             tensorboard_log="./tensorboard/",
@@ -58,7 +59,13 @@ class Training:
             n_epochs=10,
             learning_rate=0.003,
             use_sde=True,
-            sde_sample_freq=8
+            sde_sample_freq=8,
+            policy_kwargs=dict(
+                log_std_init=-1,
+                ortho_init=False,
+                activation_fn=th.nn.ReLU,
+                net_arch=[dict(pi=[256, 256, 128], vf=[256, 256, 128])]
+            )
         )
         model.learn(
             total_timesteps=30000,
@@ -68,7 +75,7 @@ class Training:
         ##### PROFILING #####
 
         # with cProfile.Profile() as pr:
-            
+
         #     model.learn(
         #         total_timesteps=1,
         #         callback=self.custom_callback,
@@ -86,8 +93,8 @@ class Training:
 
 if __name__ == "__main__":
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=5,
-                          grid_size=100, min_distance=1.0, num_envs=1)
+    env = AS2GymnasiumEnv(world_name="world1", world_size=2.5,
+                          grid_size=50, min_distance=1.0, num_envs=1, policy_type="MlpPolicy")
     env = VecMonitor(env)
     print("Start mission")
     #### ARM OFFBOARD #####

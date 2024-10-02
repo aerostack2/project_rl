@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import numpy as np
 from gymnasium.spaces import Box, Dict
 from collections import OrderedDict
@@ -10,22 +11,58 @@ from stable_baselines3.common.vec_env.base_vec_env import VecEnvObs
 from grid_map_msgs.msg import GridMap
 import cv2
 from rclpy.qos import qos_profile_sensor_data
-from as2_msgs.srv import AllocateFrontier, GetFrontiers
+from as2_msgs.srv import GetFrontiers
 from frontiers import get_frontiers, paint_frontiers
 
 
+# @dataclass
+# class ObservationMultiInputPolicy:
+#     grid_size: int
+#     observation_space = Dict(
+#         {
+#             "image": Box(
+#                 low=0, high=255, shape=(1, grid_size, grid_size), dtype=np.uint8
+#             ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown, 3: frontier point
+#             "position": Box(low=0, high=grid_size - 1, shape=(2,), dtype=np.int32),
+#             # Position of the drone in the grid
+#         }
+#     )
+
+
+# @dataclass
+# class ObservationMlpPolicy:
+#     grid_size: int
+#     observation_space = Box(low=0, high=1, shape=(grid_size * grid_size + 2,), dtype=np.float32)
+
+
 class Observation:
-    def __init__(self, grid_size, num_envs, drone_interface_list):
+    def __init__(self, grid_size, num_envs: int, drone_interface_list, policy_type: str):
         self.grid_size = grid_size
-        self.observation_space = Dict(
-            {
-                "image": Box(
-                    low=0, high=3, shape=(1, grid_size, grid_size), dtype=np.uint8
-                ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown
-                "position": Box(low=0, high=grid_size - 1, shape=(2,), dtype=np.int32),
-                # Position of the drone in the grid
-            }
-        )
+
+        if policy_type == "MlpPolicy":
+            self.observation_space = Box(low=0, high=1, shape=(
+                grid_size * grid_size + 2,), dtype=np.float32)
+        elif policy_type == "MultiInputPolicy":
+            self.observation_space = Dict(
+                {
+                    "image": Box(
+                        low=0, high=255, shape=(1, grid_size, grid_size), dtype=np.uint8
+                    ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown, 3: frontier point
+                    "position": Box(low=0, high=grid_size - 1, shape=(2,), dtype=np.int32),
+                    # Position of the drone in the grid
+                }
+            )
+
+        # self.observation_space = Dict(
+        #     {
+        #         "image": Box(
+        #             low=0, high=255, shape=(1, grid_size, grid_size), dtype=np.uint8
+        #         ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown, 3: frontier point
+        #         "position": Box(low=0, high=grid_size - 1, shape=(2,), dtype=np.int32),
+        #         # Position of the drone in the grid
+        #     }
+        # )
+        self.policy_type = policy_type
 
         self.keys, shapes, dtypes = obs_space_info(self.observation_space)
 
@@ -41,13 +78,14 @@ class Observation:
         self.grid_map_sub = self.drone_interface_list[0].create_subscription(
             GridMap, "/map_server/grid_map", self.grid_map_callback, qos_profile_sensor_data
         )
-        
+
         self.get_frontiers_srv = self.drone_interface_list[0].create_client(
             GetFrontiers, "/get_frontiers"
         )
         self.grid_matrix = np.zeros((1, grid_size, grid_size), dtype=np.uint8)
 
         self.frontiers = []
+        self.position_frontiers = []
 
     def _obs_from_buf(self) -> VecEnvObs:
         return dict_to_obs(self.observation_space, copy_obs_dict(self.buf_obs))
@@ -64,7 +102,11 @@ class Observation:
         position = self.convert_pose_to_grid_position(self.drone_interface_list[env_id].position)
         self.put_frontiers_in_grid()
         # self.show_image_with_frontiers()
-        obs = {"image": self.grid_matrix, "position": position}
+        if self.policy_type == "MlpPolicy":
+            obs = self.grid_matrix.flatten()
+            obs = np.append(obs, position)
+        elif self.policy_type == "MultiInputPolicy":
+            obs = {"image": self.grid_matrix, "position": position}
         return obs
 
     def convert_pose_to_grid_position(self, pose: list[float]):
@@ -89,9 +131,9 @@ class Observation:
         matrix = flat_data.reshape((self.grid_size, self.grid_size))
         matrix = matrix.swapaxes(0, 1)
         # Handle NaN values: convert NaNs to a specific value (2 for unknown)
-        matrix[np.isnan(matrix)] = 2
+        matrix[np.isnan(matrix)] = 2 / 3 * 255
         # Handle other values: convert all non-zero values to (1 for occupied)
-        matrix[(matrix != 0) & (matrix != 2)] = 1
+        matrix[(matrix != 0) & (matrix != 2)] = 1 / 3 * 255
 
         # Convert to uint8 and reshape
         matrix = matrix.astype(np.uint8)
@@ -101,7 +143,7 @@ class Observation:
         for frontier in self.frontiers:
             frontier_position = self.convert_pose_to_grid_position(frontier)
             # paint a square around the frontier
-            self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3
+            self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3 / 3 * 255
 
     def show_image_with_frontiers(self):
         image = self.process_image(self.grid_matrix)
@@ -110,7 +152,7 @@ class Observation:
         cv2.imshow('frontiers', image)
         cv2.waitKey(10)
 
-    def get_frontiers(self, env_id):
+    def get_and_order_frontiers(self, env_id):
         # Call the service to get the frontiers
 
         get_frontiers_req = GetFrontiers.Request()
@@ -121,6 +163,17 @@ class Observation:
             frontiers.append([frontier.point.x, frontier.point.y])
         self.frontiers = self.order_frontiers(frontiers)
         return frontiers
+
+    def get_frontiers_and_position(self, env_id):
+        get_frontiers_req = GetFrontiers.Request()
+        get_frontiers_req.explorer_id = f"drone{env_id}"
+        get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
+        self.frontiers = []
+        for frontier in get_frontiers_res.frontiers:
+            self.frontiers.append([frontier.point.x, frontier.point.y])
+            self.position_frontiers.append(self.convert_pose_to_grid_position([
+                                           frontier.point.x, frontier.point.y]))
+        return self.frontiers, self.position_frontiers
 
     def order_frontiers(self, frontiers):
         # Order frontiers from left to right and top to bottom
