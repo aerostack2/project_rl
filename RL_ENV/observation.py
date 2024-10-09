@@ -82,10 +82,12 @@ class Observation:
         self.get_frontiers_srv = self.drone_interface_list[0].create_client(
             GetFrontiers, "/get_frontiers"
         )
+
         self.grid_matrix = np.zeros((1, grid_size, grid_size), dtype=np.uint8)
 
         self.frontiers = []
         self.position_frontiers = []
+        self.wait_for_map = 0
 
     def _obs_from_buf(self) -> VecEnvObs:
         return dict_to_obs(self.observation_space, copy_obs_dict(self.buf_obs))
@@ -134,6 +136,7 @@ class Observation:
         matrix[np.isnan(matrix)] = 2 / 3 * 255
         # Handle other values: convert all non-zero values to (1 for occupied)
         matrix[(matrix != 0) & (matrix != 2)] = 1 / 3 * 255
+        self.wait_for_map = 1
 
         # Convert to uint8 and reshape
         matrix = matrix.astype(np.uint8)
@@ -173,6 +176,7 @@ class Observation:
             self.frontiers.append([frontier.point.x, frontier.point.y])
             self.position_frontiers.append(self.convert_pose_to_grid_position([
                                            frontier.point.x, frontier.point.y]))
+        self.wait_for_map = 0
         return self.frontiers, self.position_frontiers
 
     def order_frontiers(self, frontiers):

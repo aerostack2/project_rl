@@ -1,3 +1,6 @@
+import subprocess
+import os
+
 import rclpy
 from as2_python_api.drone_interface_teleop import DroneInterfaceTeleop
 from as2_msgs.srv import SetPoseWithID
@@ -53,6 +56,7 @@ class AS2GymnasiumEnv(VecEnv):
         for _ in range(num_envs):
             self.render_mode.append(["rgb_array"])
 
+        self.world_name = world_name
         self.world_size = world_size
         self.min_distance = min_distance
         self.grid_size = grid_size
@@ -121,6 +125,39 @@ class AS2GymnasiumEnv(VecEnv):
         # Return success and position
         return set_model_pose_res.success, set_model_pose_req.pose.pose
 
+    def set_random_pose_with_cli(self, model_name):
+
+        x = round(random.uniform(-self.world_size, self.world_size), 2)
+        y = round(random.uniform(-self.world_size, self.world_size), 2)
+        while True:
+            too_close = any(
+                self.distance((x, y), obstacle) < self.min_distance for obstacle in self.obstacles
+            )
+            if not too_close:
+                break
+            else:
+                x = round(random.uniform(-self.world_size, self.world_size), 2)
+                y = round(random.uniform(-self.world_size, self.world_size), 2)
+
+        yaw = round(random.uniform(0, 2 * math.pi), 2)
+        quat = euler2quat(0, 0, yaw)
+
+        command = (
+            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 -r "name: ''' +
+            "'" + f'{model_name}' + "'" + ''', position: {x: ''' + str(x) + ''', y: ''' + str(y) +
+            ''', z: ''' + str(1.0) + '''}, orientation: {x: 0, y: 0, z: 0, w: 1}"'''
+        )
+        print(command)
+
+        pro = subprocess.Popen("exec " + command, stdout=subprocess.PIPE,
+                               shell=True, preexec_fn=os.setsid)
+        pro.communicate()
+
+        pro.wait()
+        pro.kill()
+        # Return success and position
+        return
+
     def set_pose(self, model_name, x, y) -> tuple[bool, Pose]:
         set_model_pose_req = SetPoseWithID.Request()
         set_model_pose_req.pose.id = model_name
@@ -136,16 +173,35 @@ class AS2GymnasiumEnv(VecEnv):
         # Return success and position
         return set_model_pose_res.success, set_model_pose_req.pose.pose
 
+    def set_pose_with_cli(self, model_name, x, y):
+
+        command = (
+            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 -r "name: ''' +
+            "'" + f'{model_name}' + "'" + ''', position: {x: ''' + str(x) + ''', y: ''' + str(y) +
+            ''', z: ''' + str(1.0) + '''}, orientation: {x: 0, y: 0, z: 0, w: 1}"'''
+        )
+
+        pro = subprocess.Popen("exec " + command, stdout=subprocess.PIPE,
+                               shell=True, preexec_fn=os.setsid)
+        pro.communicate()
+
+        pro.wait()
+        pro.kill()
+        # Return success and position
+        return
+
     def reset_single_env(self, env_idx):
         self.activate_scan_srv.call(SetBool.Request(data=False))
         self.pause_physics()
         self.clear_map_srv.call(Empty.Request())
         print("Resetting drone", self.drone_interface_list[env_idx].drone_id)
-        _, pose = self.set_random_pose(self.drone_interface_list[env_idx].drone_id)
+        self.set_random_pose_with_cli(self.drone_interface_list[env_idx].drone_id)
 
         self.unpause_physics()
         self.activate_scan_srv.call(SetBool.Request(data=True))
-
+        self.observation_manager.wait_for_map = 0
+        while self.observation_manager.wait_for_map == 0:
+            pass
         frontiers, _ = self.observation_manager.get_frontiers_and_position(
             env_idx)
         if len(frontiers) == 0:
@@ -171,8 +227,10 @@ class AS2GymnasiumEnv(VecEnv):
             distance_reward = self.world_size - \
                 (closest_distance / math.sqrt(2) * self.world_size * 2)
 
-            self.set_pose(drone.drone_id, frontier[0], frontier[1])
-
+            self.set_pose_with_cli(drone.drone_id, frontier[0], frontier[1])
+            self.observation_manager.wait_for_map = 0
+            while self.observation_manager.wait_for_map == 0:
+                pass
             frontiers, _ = self.observation_manager.get_frontiers_and_position(
                 idx)
             obs = self._get_obs(idx)
