@@ -11,12 +11,10 @@ import torch as th
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback, EvalCallback
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from stable_baselines3.common.vec_env import VecEnv
-from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 
 from as2_gymnasium_env import AS2GymnasiumEnv
+from custom_cnn import CustomCombinedExtractor
 
 
 class CustomCallback(BaseCallback):
@@ -50,21 +48,18 @@ class Training:
 
     def train(self):
         model = PPO(
-            "MlpPolicy",
+            "MultiInputPolicy",
             self.env,
             verbose=1,
             tensorboard_log="./tensorboard/",
-            n_steps=256,
-            batch_size=64,
-            n_epochs=10,
-            learning_rate=0.003,
-            use_sde=True,
-            sde_sample_freq=8,
+            n_steps=128,
+            batch_size=32,
+            n_epochs=5,
+            learning_rate=0.0005,
             policy_kwargs=dict(
-                log_std_init=-1,
-                ortho_init=False,
                 activation_fn=th.nn.ReLU,
-                net_arch=[dict(pi=[256, 256, 128], vf=[256, 256, 128])]
+                net_arch=dict(pi=[128, 128], vf=[128, 128]),
+                features_extractor_class=CustomCombinedExtractor
             )
         )
         model.learn(
@@ -94,7 +89,7 @@ class Training:
 if __name__ == "__main__":
     rclpy.init()
     env = AS2GymnasiumEnv(world_name="world1", world_size=2.5,
-                          grid_size=50, min_distance=1.0, num_envs=1, policy_type="MlpPolicy")
+                          grid_size=50, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
     env = VecMonitor(env)
     print("Start mission")
     #### ARM OFFBOARD #####
