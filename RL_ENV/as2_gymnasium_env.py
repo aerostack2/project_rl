@@ -25,7 +25,7 @@ from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 from observation import Observation
-from action import ActionScalarVector as Action
+from action import ActionCartessianCoordinateVector as Action
 from frontiers import get_frontiers, paint_frontiers
 
 
@@ -143,7 +143,7 @@ class AS2GymnasiumEnv(VecEnv):
         quat = euler2quat(0, 0, yaw)
 
         command = (
-            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 -r "name: ''' +
+            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 10000 -r "name: ''' +
             "'" + f'{model_name}' + "'" + ''', position: {x: ''' + str(x) + ''', y: ''' + str(y) +
             ''', z: ''' + str(1.0) + '''}, orientation: {x: 0, y: 0, z: 0, w: 1}"'''
         )
@@ -176,7 +176,7 @@ class AS2GymnasiumEnv(VecEnv):
     def set_pose_with_cli(self, model_name, x, y):
 
         command = (
-            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 -r "name: ''' +
+            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 10000 -r "name: ''' +
             "'" + f'{model_name}' + "'" + ''', position: {x: ''' + str(x) + ''', y: ''' + str(y) +
             ''', z: ''' + str(1.0) + '''}, orientation: {x: 0, y: 0, z: 0, w: 1}"'''
         )
@@ -223,9 +223,10 @@ class AS2GymnasiumEnv(VecEnv):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, path_length, closest_distance, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.world_size, idx)
+            
+            print(f"closest distance: {closest_distance}")
 
-            distance_reward = self.world_size - \
-                (closest_distance / math.sqrt(2) * self.world_size * 2)
+            distance_reward = (0.5 - closest_distance / math.sqrt(2))*2
 
             self.set_pose_with_cli(drone.drone_id, frontier[0], frontier[1])
             self.observation_manager.wait_for_map = 0
@@ -236,7 +237,7 @@ class AS2GymnasiumEnv(VecEnv):
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
             self.buf_infos[idx] = {}  # TODO: Add info
-            self.buf_rews[idx] = -path_length * 0.5
+            self.buf_rews[idx] = -path_length * 0.1
             self.buf_rews[idx] += distance_reward
             self.buf_dones[idx] = False
             if len(frontiers) == 0:  # No frontiers left, episode ends
