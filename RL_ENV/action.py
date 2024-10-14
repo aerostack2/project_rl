@@ -97,13 +97,15 @@ class ActionScalarVector:
         y_action = magnitude_action * math.sin(angle_action)
 
         for index, frontier in enumerate(frontiers):
-            angle_frontier = math.atan2(
-                frontier[1] / world_size, frontier[0] / world_size)
-            magnitude_frontier = math.sqrt(
-                (frontier[0] / world_size) ** 2 + (frontier[1] / world_size) ** 2)
+            # angle_frontier = math.atan2(
+            #     frontier[1] / world_size, frontier[0] / world_size)
+            # magnitude_frontier = math.sqrt(
+            #     (frontier[0] / world_size) ** 2 + (frontier[1] / world_size) ** 2)
 
-            x_frontier = magnitude_frontier * math.cos(angle_frontier)
-            y_frontier = magnitude_frontier * math.sin(angle_frontier)
+            # x_frontier = magnitude_frontier * math.cos(angle_frontier)
+            # y_frontier = magnitude_frontier * math.sin(angle_frontier)
+            x_frontier = frontier[0]/world_size
+            y_frontier = frontier[1]/world_size
 
             point_distance = math.sqrt((x_frontier - x_action) ** 2 + (y_frontier - y_action) ** 2)
 
@@ -118,3 +120,63 @@ class ActionScalarVector:
         self.chosen_action_pub.publish(chosen_action)
 
         return closest_index, closest_distance
+
+class ActionCartessianCoordinateVector:
+    def __init__(self, drone_interface_list):
+        self.action_space = Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
+        self.drone_interface_list = drone_interface_list
+        self.actions = None
+        self.generate_path_action_client_list = []
+        for drone_interface in self.drone_interface_list:
+            self.generate_path_action_client_list.append(
+                PathActionClient(
+                    drone_interface
+                )
+            )
+        self.chosen_action_pub = self.drone_interface_list[0].create_publisher(
+            PointStamped, "/chosen_action", 10
+        )
+
+    def take_action(self, frontiers, world_size, env_id):
+        action = self.actions[env_id]
+
+        x = action[0]
+        y = action[1]
+
+        # for frontier in frontier_positions:
+        #     frontier[0] = frontier[0] - grid_size / 2
+        #     frontier[1] = -(frontier[1] - grid_size / 2)
+
+        frontier_index, closest_distance = self.select_frontier(
+            x, y, frontiers, world_size)
+
+        result, path_length = self.generate_path_action_client_list[env_id].send_goal(
+            frontiers[frontier_index])
+
+        return frontiers[frontier_index], path_length, closest_distance, result
+
+    def select_frontier(self, x_action, y_action, frontiers, world_size):
+        closest_index = None
+        closest_distance = float("inf")
+
+        for index, frontier in enumerate(frontiers):
+            x_frontier = frontier[0]/world_size
+            y_frontier = frontier[1]/world_size
+
+            point_distance = math.sqrt((x_frontier - x_action) ** 2 + (y_frontier - y_action) ** 2)
+
+            if point_distance < closest_distance:
+                closest_distance = point_distance
+                closest_index = index
+
+        chosen_action = PointStamped()
+        chosen_action.header.frame_id = "earth"
+        chosen_action.point.x = x_action * world_size
+        chosen_action.point.y = y_action * world_size
+        self.chosen_action_pub.publish(chosen_action)
+
+        return closest_index, closest_distance
+    
+class DiscreteCoordinateAction:
+    def __init__(self, drone_interface_list):
+        pass
