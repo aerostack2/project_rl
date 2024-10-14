@@ -1,0 +1,18 @@
+services:
+  aerostack2:
+    image: aerostack2/rl_exploration
+    build:
+      dockerfile: Dockerfile
+    container_name: as2_rl_exploration
+    environment:
+      DISPLAY: $DISPLAY
+      ROS_LOCALHOST_ONLY: 1
+    privileged: true
+    volumes:
+      # X11
+      - ~/.Xauthority:/root/.Xauthority
+      # 
+      - /dev/:/dev
+      - .:/project_rl/
+    network_mode: "host"
+    command: tail -f /dev/null
