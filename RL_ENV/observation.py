@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import numpy as np
 from gymnasium.spaces import Box, Dict
 from collections import OrderedDict
@@ -12,6 +11,8 @@ from grid_map_msgs.msg import GridMap
 import cv2
 from rclpy.qos import qos_profile_sensor_data
 from as2_msgs.srv import GetFrontiers
+# from as2_msgs.msg import GetFrontierReq
+# from as2_msgs.msg import GetFrontierRes
 from frontiers import get_frontiers, paint_frontiers
 
 
@@ -83,11 +84,20 @@ class Observation:
             GetFrontiers, "/get_frontiers"
         )
 
+        # self.get_frontiers_pub = self.drone_interface_list[0].create_publisher(
+        #     GetFrontierReq, "/get_frontiers_req", 1
+        # )
+
+        # self.get_frontiers_sub = self.drone_interface_list[0].create_subscription(
+        #     GetFrontierRes, "/get_frontiers_res", self.get_frontiers_callback, 1
+        # )
+
         self.grid_matrix = np.zeros((1, grid_size, grid_size), dtype=np.uint8)
 
         self.frontiers = []
         self.position_frontiers = []
         self.wait_for_map = 0
+        self.wait_for_frontiers = 0
 
     def _obs_from_buf(self) -> VecEnvObs:
         return dict_to_obs(self.observation_space, copy_obs_dict(self.buf_obs))
@@ -133,20 +143,19 @@ class Observation:
         matrix = flat_data.reshape((self.grid_size, self.grid_size))
         matrix = matrix.swapaxes(0, 1)
         # Handle NaN values: convert NaNs to a specific value (2 for unknown)
-        matrix[np.isnan(matrix)] = 2 / 3 * 255
+        matrix[np.isnan(matrix)] = 2 / 3
         # Handle other values: convert all non-zero values to (1 for occupied)
-        matrix[(matrix != 0) & (matrix != 2)] = 1 / 3 * 255
-        self.wait_for_map = 1
-
+        matrix[(matrix != 0) & (matrix != 2)] = 1 / 3
         # Convert to uint8 and reshape
         matrix = matrix.astype(np.uint8)
         self.grid_matrix = matrix[np.newaxis, :, :]  # Add batch dimension
+        self.wait_for_map = 1
 
     def put_frontiers_in_grid(self):
         for frontier in self.frontiers:
             frontier_position = self.convert_pose_to_grid_position(frontier)
             # paint a square around the frontier
-            self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3 / 3 * 255
+            self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3 / 3
 
     def show_image_with_frontiers(self):
         image = self.process_image(self.grid_matrix)
@@ -166,6 +175,16 @@ class Observation:
             frontiers.append([frontier.point.x, frontier.point.y])
         self.frontiers = self.order_frontiers(frontiers)
         return frontiers
+
+    # def call_get_frontiers_with_msg(self, env_id):
+    #     get_frontiers_req = GetFrontierReq()
+    #     get_frontiers_req.explorer_id = f"drone{env_id}"
+    #     self.get_frontiers_pub.publish(get_frontiers_req)
+    #     self.wait_for_frontiers = 0
+    #     self.wait_for_map = 0
+
+    def get_frontiers_and_position_with_msg(self, env_id):
+        return self.frontiers, self.position_frontiers
 
     def get_frontiers_and_position(self, env_id):
         get_frontiers_req = GetFrontiers.Request()
@@ -208,3 +227,18 @@ class Observation:
                 image[i, j] = color_map[image_matrix[i, j]]
 
         return image
+
+    # def get_frontiers_callback(self, response: GetFrontierRes):
+    #     self.frontiers = []
+    #     for frontier in response.frontiers:
+    #         self.frontiers.append([frontier.point.x, frontier.point.y])
+    #         self.position_frontiers.append(self.convert_pose_to_grid_position([
+    #                                        frontier.point.x, frontier.point.y]))
+    #     self.wait_for_frontiers = 1
+
+
+class ObservationDiscrete:
+    def __init__(self, grid_size, num_envs: int, drone_interface_list, policy_type: str):
+        self.grid_size = grid_size
+        if policy_type == "MlpPolicy":
+            self.observation_space = Box

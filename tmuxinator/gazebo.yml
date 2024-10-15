@@ -20,7 +20,6 @@ windows:
         - ros2 launch as2_gazebo_assets launch_simulation.py
           use_sim_time:=<%= use_sim_time %>
           simulation_config_file:=<%= simulation_config %>
-          headless:=true
         <% if display_rviz %>
         - rviz2 -d assets/rviz/one_drone.rviz
         <% end %>

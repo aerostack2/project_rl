@@ -1,3 +1,4 @@
+import torch.nn as nn
 import gymnasium as gym
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.preprocessing import is_image_space, get_flattened_obs_dim
@@ -6,6 +7,7 @@ from typing import Union, Dict, List, Tuple, Type
 from gymnasium import spaces
 from torch import nn
 import torch as th
+
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
     """
@@ -36,17 +38,19 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         extractors: Dict[str, nn.Module] = {}
 
         total_concat_size = 0  # This will track the total output size of concatenated features
-        
+
         # Loop over the spaces in the Dict observation space
         for key, subspace in observation_space.spaces.items():
             if is_image_space(subspace, normalized_image=normalized_image):
                 # Use the custom CNN for image/occupancy grid-like inputs
-                extractors[key] = CustomOccupancyCNN(subspace, features_dim=cnn_output_dim, normalized_image=normalized_image)
+                extractors[key] = CustomOccupancyGridCNN(
+                    subspace, features_dim=cnn_output_dim, normalized_image=normalized_image)
                 total_concat_size += cnn_output_dim  # Add the output size of the custom CNN
             else:
                 # If the observation is not an image, flatten it (for non-image vector inputs)
                 extractors[key] = nn.Flatten()
-                total_concat_size += get_flattened_obs_dim(subspace)  # Calculate the flattened size of the subspace
+                # Calculate the flattened size of the subspace
+                total_concat_size += get_flattened_obs_dim(subspace)
 
         self.extractors = nn.ModuleDict(extractors)
 
@@ -70,11 +74,75 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         return th.cat(encoded_tensor_list, dim=1)
 
 
+class CustomOccupancyGridCNN(BaseFeaturesExtractor):
+    """
+    Custom CNN for processing a 50x50 occupancy grid to detect frontier points.
+
+    :param observation_space: The space of the observations (should be a Box with shape (1, 50, 50)).
+    :param features_dim: Number of features extracted. 
+        This corresponds to the number of units for the final linear layer.
+    """
+
+    def __init__(
+        self,
+        observation_space: gym.Space,
+        features_dim: int = 512,  # Output feature dimension
+        normalized_image: bool = False,
+    ) -> None:
+        print(f"observation space type: {type(observation_space)}")
+        assert isinstance(observation_space, spaces.Box), (
+            "CustomOccupancyCNN must be used with a gym.spaces.Box ",
+            f"observation space, not {observation_space}",
+        )
+        super().__init__(observation_space, features_dim)
+        # Ensure the input is a valid image space
+        assert is_image_space(observation_space, check_channels=False, normalized_image=normalized_image), (
+            "CustomOccupancyCNN expects a 50x50 occupancy grid image space."
+        )
+        print("using custom cnn")
+        n_input_channels = observation_space.shape[0]
+
+        # Define the CNN layers (without max pooling)
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 16, kernel_size=5, stride=1, padding=1),  # Conv1 (50x50)
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=1),                # Conv2 (50x50)
+            nn.ReLU(),
+            # Dilated Conv1 (50x50)
+            nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=1),
+            nn.ReLU(),
+            # Conv3 (downsampled to 25x25)
+            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=2,
+                      dilation=2),    # Dilated Conv2 (25x25)
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),                # Conv4 (25x25)
+            nn.ReLU(),
+            # Upsample to 50x50
+            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=1, stride=1, padding=0),                # Conv5 (50x50)
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+
+        # Compute the number of features by doing a forward pass
+        with th.no_grad():
+            n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]
+
+        # Final linear layer
+        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        return self.linear(self.cnn(observations))
+
+
 class CustomOccupancyCNN(BaseFeaturesExtractor):
     """
     Custom CNN for processing 50x50 occupancy grids and detecting mapping features
     and isolated frontier points.
-    
+
     :param observation_space: The space representing the occupancy grid (assumed to be Box with shape [1, 50, 50]).
     :param features_dim: Number of features extracted in the final layer.
     :param normalized_image: Whether to assume that the image is already normalized.
@@ -98,32 +166,32 @@ class CustomOccupancyCNN(BaseFeaturesExtractor):
         )
         print("using custom cnn")
         n_input_channels = observation_space.shape[0]
-        
+
         # Define the CNN based on the custom architecture
         self.cnn = nn.Sequential(
             nn.Conv2d(n_input_channels, 32, kernel_size=5, stride=1, padding=2),  # Conv Block 1
             nn.ReLU(),
             nn.BatchNorm2d(32),
             nn.MaxPool2d(kernel_size=2, stride=2),  # Output size: (32, 25, 25)
-            
+
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # Conv Block 2
             nn.ReLU(),
             nn.BatchNorm2d(64),
             nn.MaxPool2d(kernel_size=2, stride=2),  # Output size: (64, 12, 12)
-            
+
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # Conv Block 3
             nn.ReLU(),
             nn.BatchNorm2d(128),
             nn.MaxPool2d(kernel_size=2, stride=2),  # Output size: (128, 6, 6)
-            
+
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),  # Conv Block 4
             nn.ReLU(),
             nn.BatchNorm2d(256),
             nn.MaxPool2d(kernel_size=2, stride=2),  # Output size: (256, 3, 3)
-            
+
             nn.Flatten(),  # Flatten the output for the linear layers
         )
-        
+
         # Compute the flattened feature size after the CNN layers
         with th.no_grad():
             n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]

@@ -202,6 +202,9 @@ class AS2GymnasiumEnv(VecEnv):
         self.observation_manager.wait_for_map = 0
         while self.observation_manager.wait_for_map == 0:
             pass
+        # self.observation_manager.call_get_frontiers_with_msg(env_id=env_idx)
+        # while self.observation_manager.wait_for_frontiers == 0:
+        #     pass
         frontiers, _ = self.observation_manager.get_frontiers_and_position(
             env_idx)
         if len(frontiers) == 0:
@@ -223,15 +226,18 @@ class AS2GymnasiumEnv(VecEnv):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, path_length, closest_distance, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.world_size, idx)
-            
+
             print(f"closest distance: {closest_distance}")
 
-            distance_reward = (0.5 - closest_distance / math.sqrt(2))*2
+            distance_reward = (0.5 - closest_distance / math.sqrt(2)) * 2
 
             self.set_pose_with_cli(drone.drone_id, frontier[0], frontier[1])
             self.observation_manager.wait_for_map = 0
             while self.observation_manager.wait_for_map == 0:
                 pass
+            # self.observation_manager.call_get_frontiers_with_msg(env_id=idx)
+            # while self.observation_manager.wait_for_frontiers == 0:
+            #     pass
             frontiers, _ = self.observation_manager.get_frontiers_and_position(
                 idx)
             obs = self._get_obs(idx)
@@ -325,7 +331,7 @@ class AS2GymnasiumEnv(VecEnv):
 if __name__ == "__main__":
     rclpy.init()
     env = AS2GymnasiumEnv(world_name="world1", world_size=2.5,
-                          grid_size=50, min_distance=1.0, num_envs=1)
+                          grid_size=50, min_distance=1.0, num_envs=1, policy_type="MlpPolicy")
     while (True):
         env.observation_manager._get_obs(0)
     # print("Start mission")
