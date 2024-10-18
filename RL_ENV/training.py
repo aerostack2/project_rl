@@ -42,7 +42,8 @@ class Training:
         self.env = env
         self.custom_callback = custom_callback
 
-    def train(self, n_steps: int = 128, batch_size: int = 32, n_epochs: int = 5, learning_rate: float = 0.0005, pi_net_arch: list = [128, 128], vf_net_arch: list = [128, 128]):
+    def train(self, n_steps: int = 128, batch_size: int = 32, n_epochs: int = 5, learning_rate: float = 0.00005, pi_net_arch: list = [256, 128, 128], vf_net_arch: list = [256, 128, 128]):
+        print(f"Training with n_steps={n_steps}, batch_size={batch_size}, n_epochs={n_epochs}, learning_rate={learning_rate}, pi_net_arch={pi_net_arch}, vf_net_arch={vf_net_arch}")
         model = PPO(
             "MultiInputPolicy",
             self.env,
@@ -76,7 +77,7 @@ class Training:
         # stats.sort_stats(pstats.SortKey.TIME)
         # # stats.print_stats()
         # stats.dump_stats(
-        #     filename='profilings/needs_profiling_base_with_gz_cli.prof')
+        #     filename='profilings/needs_profiling_clock.prof')
 
         ######################
 
@@ -89,11 +90,11 @@ if __name__ == "__main__":
                         help="Number of steps in the environment")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--n_epochs", type=int, default=5, help="Number of epochs")
-    parser.add_argument("--learning_rate", type=float, default=0.0005, help="Learning rate")
+    parser.add_argument("--learning_rate", type=float, default=0.00005, help="Learning rate")
     parser.add_argument("--pi_net_arch", type=list,
-                        default=[128, 128], help="Policy network architecture")
+                        default=[256, 128, 128], help="Policy network architecture")
     parser.add_argument("--vf_net_arch", type=list,
-                        default=[128, 128], help="Value function network architecture")
+                        default=[256, 128, 128], help="Value function network architecture")
     args = parser.parse_args()
 
     rclpy.init()

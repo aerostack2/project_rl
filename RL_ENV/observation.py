@@ -119,6 +119,7 @@ class Observation:
             obs = np.append(obs, position)
         elif self.policy_type == "MultiInputPolicy":
             obs = {"image": self.grid_matrix, "position": position}
+        self.wait_for_map = 0
         return obs
 
     def convert_pose_to_grid_position(self, pose: list[float]):
@@ -130,6 +131,8 @@ class Observation:
     def grid_map_callback(self, msg: GridMap):
         # Get the grid map from the message and save it in the grid_matrix variable
         if len(msg.data) == 0:
+            return
+        if self.wait_for_map == 1:
             return
         data = msg.data
         # Initialize the matrix with zeros
@@ -143,9 +146,9 @@ class Observation:
         matrix = flat_data.reshape((self.grid_size, self.grid_size))
         matrix = matrix.swapaxes(0, 1)
         # Handle NaN values: convert NaNs to a specific value (2 for unknown)
-        matrix[np.isnan(matrix)] = 2 / 3
+        matrix[np.isnan(matrix)] = 2 / 3 * 255
         # Handle other values: convert all non-zero values to (1 for occupied)
-        matrix[(matrix != 0) & (matrix != 2)] = 1 / 3
+        matrix[(matrix != 0) & (matrix != 2)] = 1 / 3 * 255
         # Convert to uint8 and reshape
         matrix = matrix.astype(np.uint8)
         self.grid_matrix = matrix[np.newaxis, :, :]  # Add batch dimension
@@ -155,7 +158,7 @@ class Observation:
         for frontier in self.frontiers:
             frontier_position = self.convert_pose_to_grid_position(frontier)
             # paint a square around the frontier
-            self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3 / 3
+            self.grid_matrix[0, frontier_position[1], frontier_position[0]] = 3 / 3 * 255
 
     def show_image_with_frontiers(self):
         image = self.process_image(self.grid_matrix)
@@ -195,7 +198,6 @@ class Observation:
             self.frontiers.append([frontier.point.x, frontier.point.y])
             self.position_frontiers.append(self.convert_pose_to_grid_position([
                                            frontier.point.x, frontier.point.y]))
-        self.wait_for_map = 0
         return self.frontiers, self.position_frontiers
 
     def order_frontiers(self, frontiers):
@@ -218,7 +220,7 @@ class Observation:
             0: [255],  # White
             1: [0],
             2: [128],  # Grey
-            3: [255]
+            3: [50]
         }
 
         # Map the matrix values to the corresponding colors

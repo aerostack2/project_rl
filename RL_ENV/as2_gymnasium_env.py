@@ -84,6 +84,7 @@ class AS2GymnasiumEnv(VecEnv):
         self.obstacles = self.parse_xml("assets/worlds/world1.sdf")
         print(self.obstacles)
 
+
     def pause_physics(self) -> bool:
         pause_physics_req = ControlWorld.Request()
         pause_physics_req.world_control.pause = True
@@ -143,7 +144,7 @@ class AS2GymnasiumEnv(VecEnv):
         quat = euler2quat(0, 0, yaw)
 
         command = (
-            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 10000 -r "name: ''' +
+            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 -r "name: ''' +
             "'" + f'{model_name}' + "'" + ''', position: {x: ''' + str(x) + ''', y: ''' + str(y) +
             ''', z: ''' + str(1.0) + '''}, orientation: {x: 0, y: 0, z: 0, w: 1}"'''
         )
@@ -176,7 +177,7 @@ class AS2GymnasiumEnv(VecEnv):
     def set_pose_with_cli(self, model_name, x, y):
 
         command = (
-            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 10000 -r "name: ''' +
+            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 -r "name: ''' +
             "'" + f'{model_name}' + "'" + ''', position: {x: ''' + str(x) + ''', y: ''' + str(y) +
             ''', z: ''' + str(1.0) + '''}, orientation: {x: 0, y: 0, z: 0, w: 1}"'''
         )
@@ -195,13 +196,11 @@ class AS2GymnasiumEnv(VecEnv):
         self.pause_physics()
         self.clear_map_srv.call(Empty.Request())
         print("Resetting drone", self.drone_interface_list[env_idx].drone_id)
-        self.set_random_pose_with_cli(self.drone_interface_list[env_idx].drone_id)
+        self.set_random_pose(self.drone_interface_list[env_idx].drone_id)
 
         self.unpause_physics()
         self.activate_scan_srv.call(SetBool.Request(data=True))
-        self.observation_manager.wait_for_map = 0
-        while self.observation_manager.wait_for_map == 0:
-            pass
+        self.wait_for_map()
         # self.observation_manager.call_get_frontiers_with_msg(env_id=env_idx)
         # while self.observation_manager.wait_for_frontiers == 0:
         #     pass
@@ -227,14 +226,10 @@ class AS2GymnasiumEnv(VecEnv):
             frontier, path_length, closest_distance, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.world_size, idx)
 
-            print(f"closest distance: {closest_distance}")
-
             distance_reward = (0.5 - closest_distance / math.sqrt(2)) * 2
 
-            self.set_pose_with_cli(drone.drone_id, frontier[0], frontier[1])
-            self.observation_manager.wait_for_map = 0
-            while self.observation_manager.wait_for_map == 0:
-                pass
+            self.set_pose(drone.drone_id, frontier[0], frontier[1])
+            self.wait_for_map()
             # self.observation_manager.call_get_frontiers_with_msg(env_id=idx)
             # while self.observation_manager.wait_for_frontiers == 0:
             #     pass
@@ -326,6 +321,12 @@ class AS2GymnasiumEnv(VecEnv):
         Calculate the euclidean distance between 2 points
         """
         return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
+    
+    def wait_for_map(self):
+        self.observation_manager.wait_for_map = 0
+        while self.observation_manager.wait_for_map == 0:
+            pass
+        return
 
 
 if __name__ == "__main__":
