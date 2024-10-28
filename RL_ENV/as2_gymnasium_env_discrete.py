@@ -25,7 +25,7 @@ from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 from observation import Observation
-from action import ActionCartessianCoordinateVector as Action
+from action import DiscreteCoordinateAction as Action
 from frontiers import get_frontiers, paint_frontiers
 
 
@@ -67,7 +67,7 @@ class AS2GymnasiumEnv(VecEnv):
         observation_space = self.observation_manager.observation_space
 
         # Environment action
-        self.action_manager = Action(self.drone_interface_list)
+        self.action_manager = Action(self.drone_interface_list, self.grid_size)
         action_space = self.action_manager.action_space
 
         super().__init__(num_envs, observation_space, action_space)
@@ -203,7 +203,7 @@ class AS2GymnasiumEnv(VecEnv):
         # self.observation_manager.call_get_frontiers_with_msg(env_id=env_idx)
         # while self.observation_manager.wait_for_frontiers == 0:
         #     pass
-        frontiers, _ = self.observation_manager.get_frontiers_and_position(
+        frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
             env_idx)
         if len(frontiers) == 0:
             return self.reset_single_env(env_idx)
@@ -211,7 +211,7 @@ class AS2GymnasiumEnv(VecEnv):
         self._save_obs(env_idx, obs)
         return obs
 
-    def reset(self, seed=None, **kwargs) -> VecEnvObs:
+    def reset(self, **kwargs) -> VecEnvObs:
         for idx, _ in enumerate(self.drone_interface_list):
             self.reset_single_env(idx)
         return self._obs_from_buf()
@@ -222,23 +222,20 @@ class AS2GymnasiumEnv(VecEnv):
     def step_wait(self) -> None:
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
-            frontier, path_length, closest_distance, result = self.action_manager.take_action(
-                self.observation_manager.frontiers, self.world_size, idx)
-
-            distance_reward = (0.5 - closest_distance / math.sqrt(2)) * 2
+            frontier, path_length, result = self.action_manager.take_action(
+                self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx)
 
             self.set_pose(drone.drone_id, frontier[0], frontier[1])
             self.wait_for_map()
             # self.observation_manager.call_get_frontiers_with_msg(env_id=idx)
             # while self.observation_manager.wait_for_frontiers == 0:
             #     pass
-            frontiers, _ = self.observation_manager.get_frontiers_and_position(
+            frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
                 idx)
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
             self.buf_infos[idx] = {}  # TODO: Add info
             self.buf_rews[idx] = -path_length * 0.1
-            self.buf_rews[idx] += distance_reward
             self.buf_dones[idx] = False
             if len(frontiers) == 0:  # No frontiers left, episode ends
                 self.buf_dones[idx] = True
@@ -272,7 +269,9 @@ class AS2GymnasiumEnv(VecEnv):
         *method_args,
         indices: VecEnvIndices = None,
         **method_kwargs,
-    ) -> List[Any]:
+    ):
+        if method_name == "action_masks":
+            return self.action_masks()
         return
 
     def env_is_wrapped(
@@ -326,6 +325,14 @@ class AS2GymnasiumEnv(VecEnv):
         while self.observation_manager.wait_for_map == 0:
             pass
         return
+
+    def action_masks(self):
+        action_masks = np.zeros(self.action_manager.grid_size *
+                                self.action_manager.grid_size, dtype=bool)
+
+        for frontier in self.observation_manager.position_frontiers:
+            action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = True
+        return action_masks
 
 
 if __name__ == "__main__":

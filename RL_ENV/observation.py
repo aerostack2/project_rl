@@ -167,17 +167,20 @@ class Observation:
         cv2.imshow('frontiers', image)
         cv2.waitKey(10)
 
-    def get_and_order_frontiers(self, env_id):
+    def order_and_get_frontiers_and_position(self, env_id):
         # Call the service to get the frontiers
 
         get_frontiers_req = GetFrontiers.Request()
         get_frontiers_req.explorer_id = f"drone{env_id}"
         get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
-        frontiers = []
+        self.frontiers = []
+        self.position_frontiers = []
         for frontier in get_frontiers_res.frontiers:
-            frontiers.append([frontier.point.x, frontier.point.y])
-        self.frontiers = self.order_frontiers(frontiers)
-        return frontiers
+            self.frontiers.append([frontier.point.x, frontier.point.y])
+        self.frontiers = self.order_frontiers(self.frontiers)
+        for frontier in self.frontiers:
+            self.position_frontiers.append(self.convert_pose_to_grid_position(frontier))
+        return self.frontiers, self.position_frontiers
 
     # def call_get_frontiers_with_msg(self, env_id):
     #     get_frontiers_req = GetFrontierReq()
@@ -194,6 +197,7 @@ class Observation:
         get_frontiers_req.explorer_id = f"drone{env_id}"
         get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
         self.frontiers = []
+        self.position_frontiers = []
         for frontier in get_frontiers_res.frontiers:
             self.frontiers.append([frontier.point.x, frontier.point.y])
             self.position_frontiers.append(self.convert_pose_to_grid_position([
@@ -239,8 +243,8 @@ class Observation:
     #     self.wait_for_frontiers = 1
 
 
-class ObservationDiscrete:
-    def __init__(self, grid_size, num_envs: int, drone_interface_list, policy_type: str):
-        self.grid_size = grid_size
-        if policy_type == "MlpPolicy":
-            self.observation_space = Box
+# class ObservationDiscrete:
+#     def __init__(self, grid_size, num_envs: int, drone_interface_list, policy_type: str):
+#         self.grid_size = grid_size
+#         if policy_type == "MlpPolicy":
+#             self.observation_space = Box

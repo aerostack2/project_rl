@@ -1,4 +1,4 @@
-from gymnasium.spaces import Box
+from gymnasium.spaces import Box, Discrete, MultiDiscrete
 import numpy as np
 from as2_msgs.action import NavigateToPoint
 from rclpy.action import ActionClient
@@ -104,8 +104,8 @@ class ActionScalarVector:
 
             # x_frontier = magnitude_frontier * math.cos(angle_frontier)
             # y_frontier = magnitude_frontier * math.sin(angle_frontier)
-            x_frontier = frontier[0]/world_size
-            y_frontier = frontier[1]/world_size
+            x_frontier = frontier[0] / world_size
+            y_frontier = frontier[1] / world_size
 
             point_distance = math.sqrt((x_frontier - x_action) ** 2 + (y_frontier - y_action) ** 2)
 
@@ -120,6 +120,7 @@ class ActionScalarVector:
         self.chosen_action_pub.publish(chosen_action)
 
         return closest_index, closest_distance
+
 
 class ActionCartessianCoordinateVector:
     def __init__(self, drone_interface_list):
@@ -160,8 +161,8 @@ class ActionCartessianCoordinateVector:
         closest_distance = float("inf")
 
         for index, frontier in enumerate(frontiers):
-            x_frontier = frontier[0]/world_size
-            y_frontier = frontier[1]/world_size
+            x_frontier = frontier[0] / world_size
+            y_frontier = frontier[1] / world_size
 
             point_distance = math.sqrt((x_frontier - x_action) ** 2 + (y_frontier - y_action) ** 2)
 
@@ -176,7 +177,69 @@ class ActionCartessianCoordinateVector:
         self.chosen_action_pub.publish(chosen_action)
 
         return closest_index, closest_distance
-    
-class DiscreteCoordinateAction:
+
+
+class DiscreteValueAction:  # To be used with MaskablePPO
     def __init__(self, drone_interface_list):
-        pass
+        self.action_space = Discrete(16)
+        self.drone_interface_list = drone_interface_list
+        self.actions = None
+        self.generate_path_action_client_list = []
+        for drone_interface in self.drone_interface_list:
+            self.generate_path_action_client_list.append(
+                PathActionClient(
+                    drone_interface
+                )
+            )
+        self.chosen_action_pub = self.drone_interface_list[0].create_publisher(
+            PointStamped, "/chosen_action", 10
+        )
+
+    def take_action(self, frontier_list, env_id) -> tuple:
+        action = self.actions[env_id]
+        frontier = self.select_frontier(frontier_list, action)
+
+        result, path_length = self.generate_path_action_client_list[env_id].send_goal(frontier)
+
+        return frontier, path_length, result
+
+    def generate_random_action(self):
+        return random.randint(0, 15)
+
+    def select_frontier(self, frontier_list, action):
+        chosen_action = PointStamped()
+        chosen_action.header.frame_id = "earth"
+        chosen_action.point.x = frontier_list[action][0]
+        chosen_action.point.y = frontier_list[action][1]
+        self.chosen_action_pub.publish(chosen_action)
+        return frontier_list[action]
+
+
+class DiscreteCoordinateAction:  # To be used with MaskablePPO
+    def __init__(self, drone_interface_list, grid_size):
+        self.dims = [grid_size, grid_size]
+        self.action_space = Discrete(grid_size * grid_size)
+        self.drone_interface_list = drone_interface_list
+        self.actions = None
+        self.generate_path_action_client_list = []
+        self.grid_size = grid_size
+        for drone_interface in self.drone_interface_list:
+            self.generate_path_action_client_list.append(
+                PathActionClient(
+                    drone_interface
+                )
+            )
+        self.chosen_action_pub = self.drone_interface_list[0].create_publisher(
+            PointStamped, "/chosen_action", 10
+        )
+
+    def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id) -> tuple:
+        action = self.actions[env_id]
+        action_coord = np.array([action % self.grid_size, action // self.grid_size])
+        action_index = np.where(np.all(grid_frontier_list == action_coord, axis=1))[0][0]
+        frontier = frontier_list[action_index]
+        result, path_length = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        return frontier, path_length, result
+
+    def generate_random_action(self):
+        return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]
