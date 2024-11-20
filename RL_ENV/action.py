@@ -4,7 +4,8 @@ from as2_msgs.action import NavigateToPoint
 from rclpy.action import ActionClient
 import random
 import math
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, Point
+from rdp import rdp
 
 
 class PathActionClient:
@@ -23,7 +24,7 @@ class PathActionClient:
         goal_msg.point.header.frame_id = "earth"
         self._action_client.wait_for_server()
         result = self._action_client.send_goal(goal_msg)
-        return result.result.success, result.result.path_length.data
+        return result.result.success, result.result.path_length.data, result.result.path
 
 
 class ActionSingleValue:
@@ -43,7 +44,7 @@ class ActionSingleValue:
         action = self.actions[env_id]
         frontier = self.select_frontier(frontier_list, action)
 
-        result, path_length = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
 
         return frontier, path_length, result
 
@@ -85,7 +86,7 @@ class ActionScalarVector:
         frontier_index, closest_distance = self.select_frontier(
             angle_action, magnitude_action, frontiers, world_size)
 
-        result, path_length = self.generate_path_action_client_list[env_id].send_goal(
+        result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(
             frontiers[frontier_index])
 
         return frontiers[frontier_index], path_length, closest_distance, result
@@ -97,13 +98,6 @@ class ActionScalarVector:
         y_action = magnitude_action * math.sin(angle_action)
 
         for index, frontier in enumerate(frontiers):
-            # angle_frontier = math.atan2(
-            #     frontier[1] / world_size, frontier[0] / world_size)
-            # magnitude_frontier = math.sqrt(
-            #     (frontier[0] / world_size) ** 2 + (frontier[1] / world_size) ** 2)
-
-            # x_frontier = magnitude_frontier * math.cos(angle_frontier)
-            # y_frontier = magnitude_frontier * math.sin(angle_frontier)
             x_frontier = frontier[0] / world_size
             y_frontier = frontier[1] / world_size
 
@@ -151,7 +145,7 @@ class ActionCartessianCoordinateVector:
         frontier_index, closest_distance = self.select_frontier(
             x, y, frontiers, world_size)
 
-        result, path_length = self.generate_path_action_client_list[env_id].send_goal(
+        result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(
             frontiers[frontier_index])
 
         return frontiers[frontier_index], path_length, closest_distance, result
@@ -199,7 +193,7 @@ class DiscreteValueAction:  # To be used with MaskablePPO
         action = self.actions[env_id]
         frontier = self.select_frontier(frontier_list, action)
 
-        result, path_length = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
 
         return frontier, path_length, result
 
@@ -220,7 +214,7 @@ class DiscreteCoordinateAction:  # To be used with MaskablePPO
         self.dims = [grid_size, grid_size]
         self.action_space = Discrete(grid_size * grid_size)
         self.drone_interface_list = drone_interface_list
-        self.actions = None
+        self.actions = []
         self.generate_path_action_client_list = []
         self.grid_size = grid_size
         for drone_interface in self.drone_interface_list:
@@ -238,7 +232,9 @@ class DiscreteCoordinateAction:  # To be used with MaskablePPO
         action_coord = np.array([action % self.grid_size, action // self.grid_size])
         action_index = np.where(np.all(grid_frontier_list == action_coord, axis=1))[0][0]
         frontier = frontier_list[action_index]
-        result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
+            frontier)
         nav_path = []
         if result:
             for point in path:
@@ -252,4 +248,47 @@ class DiscreteCoordinateAction:  # To be used with MaskablePPO
     def path_length(self, path):
         points = np.array(path)
 
+        return np.sum(np.linalg.norm(points[1:] - points[:-1], axis=1))
+
+
+class DiscreteCoordinateActionSingleEnv:  # To be used with MaskablePPO
+    def __init__(self, drone_interface_list, grid_size):
+        self.dims = [grid_size, grid_size]
+        self.action_space = Discrete(grid_size * grid_size)
+        self.drone_interface_list = drone_interface_list
+        self.actions = []
+        self.generate_path_action_client_list = []
+        self.grid_size = grid_size
+        for drone_interface in self.drone_interface_list:
+            self.generate_path_action_client_list.append(
+                PathActionClient(
+                    drone_interface
+                )
+            )
+        self.chosen_action_pub = self.drone_interface_list[0].create_publisher(
+            PointStamped, "/chosen_action", 10
+        )
+
+    def take_action(self, frontier_list: list[list[int]], position_frontier_list: list[list[int]], env_id) -> tuple:
+        action = self.actions[env_id]
+        action_coord = np.array([action % self.grid_size, action // self.grid_size])
+        action_index = np.where(np.all(position_frontier_list == action_coord, axis=1))[0][0]
+        frontier = frontier_list[action_index]
+        position_frontier = position_frontier_list[action_index]
+        result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
+            frontier)
+        nav_path = []
+        if result:
+            for point in path:
+                nav_path.append([point.x, point.y])
+            path_length = self.path_length(nav_path)
+            # nav_path = rdp(nav_path, epsilon=0.1)
+        return frontier, position_frontier, path_length, nav_path, result
+
+    def generate_random_action(self):
+        return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]
+
+    def path_length(self, path):
+        points = np.array(path)
+        # Compute Euclidean distances between consecutive points
         return np.sum(np.linalg.norm(points[1:] - points[:-1], axis=1))

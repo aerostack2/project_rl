@@ -16,7 +16,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority:rw
       # ssh related
-      - $SSH_AUTH_SOCK:$SSH_AUTH_SOCK:ro
+#      - $SSH_AUTH_SOCK:$SSH_AUTH_SOCK:ro
       # git
       - ~/.gitconfig:/root/.gitconfig_local
       # working dirs

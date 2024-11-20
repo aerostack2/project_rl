@@ -2,7 +2,7 @@
   # Global Parameters
   ros__parameters:
     use_sim_time: true
-    tf_timeout_threshold: 0.3
+    tf_timeout_threshold: 0.0
 
   # Basic Robotics Functions
   # State Estimator

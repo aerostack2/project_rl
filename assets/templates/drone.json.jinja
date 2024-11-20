@@ -4,7 +4,7 @@
     {%- for drone in drones %}
         {
             "model_type": "quadrotor_base",
-            "model_name": "drone0",
+            "model_name": "{{ drone.model_name }}",
             "xyz": {{ drone.xyz }},
             "rpy": {{ drone.rpy }},
             "flight_time": 60,

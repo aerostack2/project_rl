@@ -26,7 +26,7 @@ def get_drones_yml(filename: Path) -> list[str]:
 
 def get_drones_json(filename: Path) -> list[str]:
     """Get drone names listed in swarm config file"""
-    with open(filename, "r", encoding='utf-8') as f:
+    with open(f"{filename}", "r", encoding='utf-8') as f:
         world_json = json.load(f)
     drones_ = []
     for drone in world_json['drones']:

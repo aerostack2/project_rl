@@ -45,31 +45,37 @@ swarm=${swarm:="false"}
 record_rosbag=${record_rosbag:="false"}
 launch_keyboard_teleop=${launch_keyboard_teleop:="false"}
 
-simulation_config="assets/worlds/world1.json" 
+simulation_config="assets/worlds/world2.json" 
 if [[ ${swarm} == "true" ]]; then
-  simulation_config="sim_config/world_swarm.json"
+  simulation_config="assets/worlds/world2.json"
 fi
 
-drones=$(python utils/get_drones.py ${simulation_config} --sep ' ')
+drones=($(python3 utils/get_drones.py ${simulation_config} --sep ' '))
+echo drones: ${drones[@]}
 for drone in "${drones[@]}"; do
+  echo "Starting tmuxinator session for drone: ${drone}"
   tmuxinator start -n ${drone} -p tmuxinator/session.yml \
     drone_namespace=${drone} \
     simulation_config=${simulation_config} &
   wait
 done
 
-if [[ ${record_rosbag} == "true" ]]; then
-  tmuxinator start -n rosbag -p tmuxinator/rosbag.yml \
-    drone_namespace=$(python utils/get_drones.py ${simulation_config}) &
-  wait
-fi
+# if [[ ${record_rosbag} == "true" ]]; then
+#   tmuxinator start -n rosbag -p tmuxinator/rosbag.yml \
+#     drone_namespace=$(python utils/get_drones.py ${simulation_config}) &
+#   wait
+# fi
 
-if [[ ${launch_keyboard_teleop} == "true" ]]; then
-  tmuxinator start -n keyboard_teleop -p tmuxinator/keyboard_teleop.yml \
-    simulation=true \
-    drone_namespace=$(python utils/get_drones.py ${simulation_config} --sep ",") &
-  wait
-fi
+# if [[ ${launch_keyboard_teleop} == "true" ]]; then
+#   tmuxinator start -n keyboard_teleop -p tmuxinator/keyboard_teleop.yml \
+#     simulation=true \
+#     drone_namespace=$(python utils/get_drones.py ${simulation_config} --sep ",") &
+#   wait
+# fi
+
+tmuxinator start -n swarm_nodes -p tmuxinator/session_swarm.yml \
+  simulation_config=${simulation_config} &
+wait
 
 tmuxinator start -n gazebo -p tmuxinator/gazebo.yml \
   simulation_config=${simulation_config} \
