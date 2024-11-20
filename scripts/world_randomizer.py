@@ -73,10 +73,10 @@ def generate_world(world_name: str, num_world: int, num_object: int,
 
     json_template = environment.get_template("drone.json.jinja")
     sdf_template = environment.get_template("world.sdf.jinja")
-    world_size = 2.5
+    world_size = 10.0
 
     for i in range(num_world):
-        world_name = f"{world_name}{i+1}"
+        world_name = f"{world_name}{i+2}"
         drone = randomize_drone_pose(upper=world_size, lower=-world_size)
         drone_xy = drone['xyz'][:-1]
         obstacles = generate_obstacles(

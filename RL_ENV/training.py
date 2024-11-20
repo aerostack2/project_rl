@@ -53,7 +53,7 @@ class Training:
     #     # helpful method we can rely on.
     #     return env.valid_action_mask()
 
-    def train(self, n_steps: int = 128, batch_size: int = 32, n_epochs: int = 5, learning_rate: float = 0.00005, pi_net_arch: list = [256, 128, 128], vf_net_arch: list = [256, 128, 128]):
+    def train(self, n_steps: int = 128, batch_size: int = 32, n_epochs: int = 5, learning_rate: float = 0.00005, pi_net_arch: list = [256, 256], vf_net_arch: list = [256, 256]):
         print(
             f"Training with n_steps={n_steps}, batch_size={batch_size}, n_epochs={n_epochs}, learning_rate={learning_rate}, pi_net_arch={pi_net_arch}, vf_net_arch={vf_net_arch}")
         model = MaskablePPO(
@@ -68,11 +68,11 @@ class Training:
             policy_kwargs=dict(
                 activation_fn=th.nn.ReLU,
                 net_arch=dict(pi=pi_net_arch, vf=vf_net_arch),
-                features_extractor_class=CustomCombinedExtractor
+                features_extractor_class=CustomCombinedExtractor,
             )
         )
         model.learn(
-            total_timesteps=30000,
+            total_timesteps=50000,
             callback=self.custom_callback,
         )
 
@@ -104,14 +104,14 @@ if __name__ == "__main__":
     parser.add_argument("--n_epochs", type=int, default=5, help="Number of epochs")
     parser.add_argument("--learning_rate", type=float, default=0.00005, help="Learning rate")
     parser.add_argument("--pi_net_arch", type=list,
-                        default=[128, 128], help="Policy network architecture")
+                        default=[256, 256], help="Policy network architecture")
     parser.add_argument("--vf_net_arch", type=list,
-                        default=[128, 128], help="Value function network architecture")
+                        default=[256, 256], help="Value function network architecture")
     args = parser.parse_args()
 
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=2.5,
-                          grid_size=50, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
+    env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
+                          grid_size=200, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
     #
     env = VecMonitor(env)
     # env = ActionMasker(env.venv, action_mask_fn=Training.mask_fn)

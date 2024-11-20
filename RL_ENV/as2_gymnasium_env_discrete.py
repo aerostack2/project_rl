@@ -235,16 +235,16 @@ class AS2GymnasiumEnv(VecEnv):
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
             self.buf_infos[idx] = {}  # TODO: Add info
-            self.buf_rews[idx] = -path_length * 0.1
+            self.buf_rews[idx] = -(path_length / math.sqrt((self.world_size*2)**2 + (self.world_size*2)**2))
             self.buf_dones[idx] = False
             if len(frontiers) == 0:  # No frontiers left, episode ends
                 self.buf_dones[idx] = True
-                self.buf_rews[idx] = 100.0
+                # self.buf_rews[idx] = 1.0
                 self.reset_single_env(idx)
             if not result:
                 print("Failed to reach goal")
                 self.buf_dones[idx] = True
-                self.buf_rews[idx] = -100.0
+                self.buf_rews[idx] = -1.0
                 self.reset_single_env(idx)
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
@@ -337,10 +337,10 @@ class AS2GymnasiumEnv(VecEnv):
 
 if __name__ == "__main__":
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=2.5,
-                          grid_size=50, min_distance=1.0, num_envs=1, policy_type="MlpPolicy")
+    env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
+                          grid_size=200, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
     while (True):
-        env.observation_manager._get_obs(0)
+        print(env.observation_manager._get_obs(0)["position"])
     # print("Start mission")
     # #### ARM OFFBOARD #####
     # print("Arm")
