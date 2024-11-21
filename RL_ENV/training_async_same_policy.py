@@ -186,7 +186,7 @@ if __name__ == "__main__":
     # policy.share_memory()
 
     def make_training_0():
-        env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
+        env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
                               grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=0, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
@@ -195,7 +195,7 @@ if __name__ == "__main__":
         return Training(env=env, policy=policy, policy_lock=policy_lock)
 
     def make_training_1():
-        env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
+        env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
                               grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=1, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         return Training(env=env, policy=policy, policy_lock=policy_lock)
 
     def make_training_2():
-        env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
+        env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
                               grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=2, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
@@ -213,7 +213,7 @@ if __name__ == "__main__":
         return Training(env=env, policy=policy, policy_lock=policy_lock)
 
     def make_training_3():
-        env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
+        env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
                               grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=3, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
