@@ -263,7 +263,6 @@ class AS2GymnasiumEnv(VecEnv):
         self.action_manager.actions = actions
 
     def step_wait(self) -> None:
-        print("entra aqui despues del update")
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, position_frontier, path_length, path, result = self.action_manager.take_action(
@@ -286,16 +285,12 @@ class AS2GymnasiumEnv(VecEnv):
                 self.shared_frontiers.append(position_frontier)
                 self.step_lengths[self.env_index] = len(path)
             if self.queue.empty():
-                print("waiting for steps")
                 self.barrier_step.wait()
 
             with self.condition:
-                print(f"drone {drone.drone_id} notifying")
                 self.condition.notify_all()
-                print(f"drone {drone.drone_id} notified")
 
             while True:
-                print(f"drone {drone.drone_id} about to move")
                 try:
                     self.barrier_step.wait()
                 except BrokenBarrierError as e:
@@ -305,7 +300,6 @@ class AS2GymnasiumEnv(VecEnv):
                     length = min(self.step_lengths)
 
                 self.set_pose(drone.drone_id, path[length - 1][0], path[length - 1][1])
-                print(f"drone {drone.drone_id} moving")
                 try:
                     self.barrier_step.wait()
                 except BrokenBarrierError as e:
@@ -318,24 +312,14 @@ class AS2GymnasiumEnv(VecEnv):
 
                     with self.lock:
                         if not any((step_length == 0) for step_length in self.step_lengths):
-                            print(f"drone {drone.drone_id} substracting length")
                             for i in range(self.num_drones):
                                 self.step_lengths[i] -= length
 
-                    print(f"drone {drone.drone_id} action done")
                     break
                 else:
-                    print(f"drone {drone.drone_id} waiting")
-                    print(f"drone {drone.drone_id} path length: {len(path)}")
-                    print(f"drone {drone.drone_id} length: {length}")
                     path = path[length:]
                     with self.condition:
                         self.condition.wait()
-                    print(f"drone {drone.drone_id} waited")
-                    # for point in path:
-                    #     self.set_pose(drone.drone_id, point[0], point[1])
-                    # self.drone_interface_list[idx].follow_path.follow_path_with_keep_yaw(
-                    #     path=path, speed=5.0, frame_id="earth")
 
             self.wait_for_map()
 
@@ -346,7 +330,8 @@ class AS2GymnasiumEnv(VecEnv):
             self._save_obs(idx, obs)
 
             self.buf_infos[idx] = {}  # TODO: Add info
-            self.buf_rews[idx] = -path_length * 0.1
+            self.buf_rews[idx] = -(path_length /
+                                   math.sqrt((self.world_size * 2)**2 + (self.world_size * 2)**2))
             self.buf_dones[idx] = False
 
             # with self.lock:
@@ -365,24 +350,19 @@ class AS2GymnasiumEnv(VecEnv):
                         self.observation_manager.position_frontiers.remove(shared_frontier)
 
             if len(position_frontiers) == 0:
-                print(f"Drone {drone.drone_id} has no frontiers")
                 self.buf_dones[idx] = True
-                self.buf_rews[idx] = 100.0
+                # self.buf_rews[idx] = 100.0
 
                 with self.lock:
-                    self.step_lengths[self.env_index] = 10000
+                    self.step_lengths[self.env_index] = 10000  # Arbitrary large number
 
                 if not self.barrier_step.broken:
                     self.barrier_step.abort()
 
                 with self.condition:
-                    print(f"drone {drone.drone_id} notifying")
                     self.condition.notify_all()
-                    print(f"drone {drone.drone_id} notified")
 
                 self.reset_single_env(idx)
-
-            print(f"drone {drone.drone_id} step done")
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
