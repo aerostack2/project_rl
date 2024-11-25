@@ -17,6 +17,20 @@ from custom_cnn import CustomCombinedExtractor
 
 import argparse
 
+from torch.distributions.constraints import Constraint
+
+
+class CustomSimplex(Constraint):
+    """
+    Constrain to the unit simplex in the innermost (rightmost) dimension.
+    Specifically: `x >= 0` and `x.sum(-1) == 1`.
+    """
+
+    event_dim = 1
+
+    def check(self, value):
+        return th.all(value >= 0, dim=-1) & ((value.sum(-1) - 1).abs() < 1e-4)
+
 
 class CustomCallback(BaseCallback):
     """
@@ -97,6 +111,7 @@ class Training:
 
 
 if __name__ == "__main__":
+    th.distributions.constraints._Simplex = CustomSimplex
     parser = argparse.ArgumentParser(description="Perform training of the model")
     parser.add_argument("--n_steps", type=int, default=128,
                         help="Number of steps in the environment")
