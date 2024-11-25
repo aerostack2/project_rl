@@ -5,7 +5,6 @@ from rclpy.action import ActionClient
 import random
 import math
 from geometry_msgs.msg import PointStamped, Point
-from rdp import rdp
 
 
 class PathActionClient:

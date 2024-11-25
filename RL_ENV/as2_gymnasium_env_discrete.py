@@ -81,7 +81,7 @@ class AS2GymnasiumEnv(VecEnv):
         # Make a drone interface with functionality to control the internal state of the drone with rl env methods
 
         # Other stuff
-        self.obstacles = self.parse_xml("assets/worlds/world1.sdf")
+        self.obstacles = self.parse_xml("assets/worlds/world2.sdf")
         print(self.obstacles)
 
     def pause_physics(self) -> bool:
@@ -245,7 +245,7 @@ class AS2GymnasiumEnv(VecEnv):
                 print("Failed to reach goal")
                 self.buf_dones[idx] = True
                 self.buf_rews[idx] = -1.0
-                self.reset_single_env(idx)
+                # self.reset_single_env(idx)
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
