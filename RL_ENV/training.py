@@ -111,7 +111,6 @@ class Training:
 
 
 if __name__ == "__main__":
-    th.distributions.constraints._Simplex = CustomSimplex
     parser = argparse.ArgumentParser(description="Perform training of the model")
     parser.add_argument("--n_steps", type=int, default=128,
                         help="Number of steps in the environment")
@@ -133,6 +132,8 @@ if __name__ == "__main__":
     print("Start mission")
     custom_callback = CustomCallback()
     training = Training(env, custom_callback)
+    th.distributions.Categorical.arg_constraints = {
+        "probs": CustomSimplex(), "logits": constraints.real_vector}  # Modify simplex constrain to be less restrictive
     print("Training the model...")
     training.train(n_steps=args.n_steps, batch_size=args.batch_size,
                    n_epochs=args.n_epochs, learning_rate=args.learning_rate,
