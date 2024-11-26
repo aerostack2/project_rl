@@ -18,6 +18,7 @@ from custom_cnn import CustomCombinedExtractor
 import argparse
 
 from torch.distributions.constraints import Constraint
+from torch.distributions import constraints
 
 
 class CustomSimplex(Constraint):
