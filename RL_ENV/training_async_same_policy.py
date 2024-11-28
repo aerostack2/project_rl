@@ -57,8 +57,8 @@ class SharedPolicyManager(BaseManager):
 
 class Training:
     def __init__(self, env: AS2GymnasiumEnv, policy: MaskableMultiInputActorCriticPolicy, policy_lock: None,
-                 n_steps: int = 16,
-                 batch_size: int = 4, n_epochs: int = 5, learning_rate: float = 0.00005,
+                 n_steps: int = 128,
+                 batch_size: int = 32, n_epochs: int = 5, learning_rate: float = 0.00005,
                  pi_net_arch: list = [128, 128], vf_net_arch: list = [128, 128]):
         self.env = env
         # torch.cuda.is_available = lambda: False  # Disable cuda
@@ -72,6 +72,10 @@ class Training:
             n_epochs=n_epochs,
             learning_rate=learning_rate,
             device="cpu",
+            policy_kwargs=dict(
+                net_arch=dict(pi=pi_net_arch, vf=vf_net_arch),
+                features_extractor_class=CustomCombinedExtractor,
+            )
         )
         print(f"Training with n_steps={n_steps}, batch_size={batch_size}, n_epochs={n_epochs}, \
               learning_rate={learning_rate}, pi_net_arch={pi_net_arch}, vf_net_arch={vf_net_arch}")
@@ -156,7 +160,7 @@ if __name__ == "__main__":
     vec_sync = manager.list([False, False, False, False])
     # First three for reset
 
-    step_lengths = manager.list([-1.0, -1.0, -1.0, -1.0])
+    step_lengths = manager.list([10000.0, 10000.0, 10000.0, 10000.0])
 
     rclpy.init()
 

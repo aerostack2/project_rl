@@ -30,6 +30,7 @@ class CustomSimplex(Constraint):
     event_dim = 1
 
     def check(self, value):
+
         return th.all(value >= 0, dim=-1) & ((value.sum(-1) - 1).abs() < 1e-4)
 
 
@@ -87,7 +88,7 @@ class Training:
             )
         )
         model.learn(
-            total_timesteps=50000,
+            total_timesteps=80000,
             callback=self.custom_callback,
         )
 
@@ -116,12 +117,12 @@ if __name__ == "__main__":
     parser.add_argument("--n_steps", type=int, default=128,
                         help="Number of steps in the environment")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
-    parser.add_argument("--n_epochs", type=int, default=5, help="Number of epochs")
+    parser.add_argument("--n_epochs", type=int, default=4, help="Number of epochs")
     parser.add_argument("--learning_rate", type=float, default=0.00005, help="Learning rate")
     parser.add_argument("--pi_net_arch", type=list,
-                        default=[256, 256], help="Policy network architecture")
+                        default=[128, 128], help="Policy network architecture")
     parser.add_argument("--vf_net_arch", type=list,
-                        default=[256, 256], help="Value function network architecture")
+                        default=[128, 128], help="Value function network architecture")
     args = parser.parse_args()
 
     rclpy.init()
@@ -133,8 +134,10 @@ if __name__ == "__main__":
     print("Start mission")
     custom_callback = CustomCallback()
     training = Training(env, custom_callback)
+
     th.distributions.Categorical.arg_constraints = {
         "probs": CustomSimplex(), "logits": constraints.real_vector}  # Modify simplex constrain to be less restrictive
+
     print("Training the model...")
     training.train(n_steps=args.n_steps, batch_size=args.batch_size,
                    n_epochs=args.n_epochs, learning_rate=args.learning_rate,

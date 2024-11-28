@@ -224,8 +224,9 @@ class AS2GymnasiumEnv(VecEnv):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, path_length, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx)
-
+            self.activate_scan_srv.call(SetBool.Request(data=False))
             self.set_pose(drone.drone_id, frontier[0], frontier[1])
+            self.activate_scan_srv.call(SetBool.Request(data=True))
             self.wait_for_map()
             # self.observation_manager.call_get_frontiers_with_msg(env_id=idx)
             # while self.observation_manager.wait_for_frontiers == 0:
@@ -235,7 +236,8 @@ class AS2GymnasiumEnv(VecEnv):
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
             self.buf_infos[idx] = {}  # TODO: Add info
-            self.buf_rews[idx] = -(path_length / math.sqrt((self.world_size*2)**2 + (self.world_size*2)**2))
+            self.buf_rews[idx] = -(path_length /
+                                   math.sqrt((self.world_size * 2)**2 + (self.world_size * 2)**2))
             self.buf_dones[idx] = False
             if len(frontiers) == 0:  # No frontiers left, episode ends
                 self.buf_dones[idx] = True
@@ -339,8 +341,9 @@ if __name__ == "__main__":
     rclpy.init()
     env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
                           grid_size=200, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
-    while (True):
-        print(env.observation_manager._get_obs(0)["position"])
+    env.reset()
+    env.wait_for_map()
+    env.observation_manager._get_obs(0)
     # print("Start mission")
     # #### ARM OFFBOARD #####
     # print("Arm")
@@ -361,4 +364,4 @@ if __name__ == "__main__":
     #     # print('number of frontiers:', len(env.observation_manager.frontiers))
     #     # env.observation_manager.show_image_with_frontiers()
     #     # time.sleep(2.0)
-    # rclpy.shutdown()
+    rclpy.shutdown()

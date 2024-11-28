@@ -5,6 +5,8 @@ from rclpy.action import ActionClient
 import random
 import math
 from geometry_msgs.msg import PointStamped, Point
+from rdp import rdp
+import time
 
 
 class PathActionClient:
@@ -231,14 +233,16 @@ class DiscreteCoordinateAction:  # To be used with MaskablePPO
         action_coord = np.array([action % self.grid_size, action // self.grid_size])
         action_index = np.where(np.all(grid_frontier_list == action_coord, axis=1))[0][0]
         frontier = frontier_list[action_index]
-        result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        # result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
         result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
             frontier)
         nav_path = []
         if result:
             for point in path:
                 nav_path.append([point.x, point.y])
+            # path_simplified = rdp(nav_path, epsilon=0.1)
             path_length = self.path_length(nav_path)
+
         return frontier, path_length, result
 
     def generate_random_action(self):
@@ -280,8 +284,8 @@ class DiscreteCoordinateActionSingleEnv:  # To be used with MaskablePPO
         if result:
             for point in path:
                 nav_path.append([point.x, point.y])
+            # path_simplified = rdp(nav_path, epsilon=0.1)
             path_length = self.path_length(nav_path)
-            # nav_path = rdp(nav_path, epsilon=0.1)
         return frontier, position_frontier, path_length, nav_path, result
 
     def generate_random_action(self):

@@ -231,8 +231,8 @@ class AS2GymnasiumEnv(VecEnv):
                 for initial_position in self.drones_initial_position:
                     self.drones_initial_position.remove(initial_position)
 
-            for shared_frontier in self.shared_frontiers:
-                self.shared_frontiers.remove(shared_frontier)
+            for _ in self.shared_frontiers:
+                self.shared_frontiers.pop(0)
 
         self.barrier_reset.wait()
 
@@ -270,21 +270,25 @@ class AS2GymnasiumEnv(VecEnv):
 
             if not result:
                 print(f"Failed to reach goal (Invalid action) for drone {drone.drone_id}")
-                self.buf_rews[idx] = -10.0
+                self.buf_rews[idx] = -1.0
                 self.wait_for_map()
 
                 frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
-                    idx)
+                    self.env_index)
                 obs = self._get_obs(idx)
                 self._save_obs(idx, obs)
                 self.buf_infos[idx] = {}  # TODO: Add info
                 self.buf_dones[idx] = False
                 return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
+            self.activate_scan_srv.call(SetBool.Request(data=False))
+
             with self.lock:
                 self.shared_frontiers.append(position_frontier)
                 self.step_lengths[self.env_index] = len(path)
+
             if self.queue.empty():
+                print("queue empty")
                 self.barrier_step.wait()
 
             with self.condition:
@@ -318,8 +322,14 @@ class AS2GymnasiumEnv(VecEnv):
                     break
                 else:
                     path = path[length:]
+                    print(f"Drone {drone.drone_id} waiting for other drones")
                     with self.condition:
                         self.condition.wait()
+
+            self.activate_scan_srv.call(SetBool.Request(data=True))
+
+            with self.lock:
+                self.shared_frontiers.remove(position_frontier)
 
             self.wait_for_map()
 
@@ -346,12 +356,14 @@ class AS2GymnasiumEnv(VecEnv):
                 for shared_frontier in self.shared_frontiers:
                     if shared_frontier in position_frontiers:
                         position_frontiers.remove(shared_frontier)
-                    if shared_frontier in self.observation_manager.position_frontiers:
-                        self.observation_manager.position_frontiers.remove(shared_frontier)
 
-            if len(position_frontiers) == 0:
+            for frontier in self.observation_manager.position_frontiers:
+                if frontier in self.shared_frontiers:
+                    print("Frontier already chosen")
+                    self.observation_manager.position_frontiers.remove(frontier)
+            print("Drone", drone.drone_id, " step done")
+            if len(self.observation_manager.position_frontiers) == 0:
                 self.buf_dones[idx] = True
-                # self.buf_rews[idx] = 100.0
 
                 with self.lock:
                     self.step_lengths[self.env_index] = 10000  # Arbitrary large number
@@ -363,6 +375,8 @@ class AS2GymnasiumEnv(VecEnv):
                     self.condition.notify_all()
 
                 self.reset_single_env(idx)
+
+                print("Drone", drone.drone_id, "done")
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
@@ -448,10 +462,14 @@ class AS2GymnasiumEnv(VecEnv):
                                 self.action_manager.grid_size, dtype=bool)
         with self.lock:
             for frontier in self.observation_manager.position_frontiers:
-                if not any((frontier == position_frontier) for position_frontier in self.shared_frontiers):
-                    action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = True
-                else:
+                if frontier in self.shared_frontiers:
                     print("Frontier already chosen")
+                    action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = False
+                else:
+                    action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = True
+        if all(action_masks == False):
+            print(f"Drone{self.drone_interface_list[0].drone_id} All actions masked")
+            print(self.observation_manager.position_frontiers)
         return action_masks
 
     # def sync_reset(self, phase: int = 0):
