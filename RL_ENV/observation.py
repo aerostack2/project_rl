@@ -47,6 +47,7 @@ class Observation:
         if policy_type == "MlpPolicy":
             self.observation_space = Box(low=0, high=1, shape=(
                 grid_size * grid_size + 2,), dtype=np.float32)
+
         elif policy_type == "MultiInputPolicy":
             self.observation_space = Dict(
                 {
@@ -123,7 +124,10 @@ class Observation:
         # self.save_image_as_csv("frontiers.csv")
         self.save_image_as_txt("frontiers.txt")
         if self.policy_type == "MlpPolicy":
-            obs = self.grid_matrix.flatten()
+            obs = self.grid_matrix.flatten().astype(np.float32)
+            obs = obs / 255
+            position = position / self.grid_size
+            position = position.astype(np.float32)
             obs = np.append(obs, position)
         elif self.policy_type == "MultiInputPolicy":
             obs = {"image": self.grid_matrix, "position": position}
@@ -133,7 +137,7 @@ class Observation:
         desp = (self.grid_size) / 2
         x = -(round(pose[1] * 10, 0) - desp)
         y = -(round(pose[0] * 10, 0) - desp)
-        return (np.array([x, y], dtype=np.int32))
+        return np.array([x, y], dtype=np.int32)
 
     def grid_map_callback(self, msg: OccupancyGrid):
         # Get the grid map from the message and save it in the grid_matrix variable
@@ -185,7 +189,6 @@ class Observation:
     def save_image_as_txt(self, path: str):
         # image = self.process_image(self.grid_matrix)
         image = self.grid_matrix[0]
-        print(image.shape)
         with open(path, 'w') as f:
             for row in image:
                 for cell in row:
@@ -196,20 +199,20 @@ class Observation:
         image = self.grid_matrix[0]
         np.savetxt(path, image, delimiter=",")
 
-    def order_and_get_frontiers_and_position(self, env_id):
-        # Call the service to get the frontiers
+    # def order_and_get_frontiers_and_position(self, env_id):
+    #     # Call the service to get the frontiers
 
-        get_frontiers_req = GetFrontiers.Request()
-        get_frontiers_req.explorer_id = f"drone{env_id}"
-        get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
-        self.frontiers = []
-        self.position_frontiers = []
-        for frontier in get_frontiers_res.frontiers:
-            self.frontiers.append([frontier.point.x, frontier.point.y])
-        self.frontiers = self.order_frontiers(self.frontiers)
-        for frontier in self.frontiers:
-            self.position_frontiers.append(self.convert_pose_to_grid_position(frontier))
-        return self.frontiers, self.position_frontiers
+    #     get_frontiers_req = GetFrontiers.Request()
+    #     get_frontiers_req.explorer_id = f"drone{env_id}"
+    #     get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
+    #     self.frontiers = []
+    #     self.position_frontiers = []
+    #     for frontier in get_frontiers_res.frontiers:
+    #         self.frontiers.append([frontier.point.x, frontier.point.y])
+    #     self.frontiers = self.order_frontiers(self.frontiers)
+    #     for frontier in self.frontiers:
+    #         self.position_frontiers.append(self.convert_pose_to_grid_position(frontier))
+    #     return self.frontiers, self.position_frontiers
 
     # def call_get_frontiers_with_msg(self, env_id):
     #     get_frontiers_req = GetFrontierReq()
@@ -229,8 +232,9 @@ class Observation:
         self.position_frontiers = []
         for frontier in get_frontiers_res.frontiers:
             self.frontiers.append([frontier.point.x, frontier.point.y])
-            self.position_frontiers.append(self.convert_pose_to_grid_position([
-                                           frontier.point.x, frontier.point.y]))
+            position_frontier = self.convert_pose_to_grid_position([
+                frontier.point.x, frontier.point.y])
+            self.position_frontiers.append((position_frontier[0], position_frontier[1]))
         return self.frontiers, self.position_frontiers
 
     def order_frontiers(self, frontiers):
@@ -500,7 +504,7 @@ class ObservationAsync:
         get_frontiers_req = GetFrontiers.Request()
         get_frontiers_req.explorer_id = f"drone{env_id}"
         future = self.get_frontiers_srv.call_async(get_frontiers_req)
-        then = self.drone_interface_list[0].get_clock().now().to_msg().sec
+        then = time.time()
         while rclpy.ok():
             if future.done():
                 if future.result() is not None:
@@ -509,17 +513,18 @@ class ObservationAsync:
                 else:
                     print(f"Drone{env_id} service call failed, calling again...")
                     future = self.get_frontiers_srv.call_async(get_frontiers_req)
-            if self.drone_interface_list[0].get_clock().now().to_msg().sec - then > 1.0:
+            if time.time() - then > 1.0:
                 print(f"Drone{env_id} service call timeout, calling again...")
                 future = self.get_frontiers_srv.call_async(get_frontiers_req)
-                then = self.drone_interface_list[0].get_clock().now().to_msg().sec
+                then = time.time()
 
         self.frontiers = []
         self.position_frontiers = []
         for frontier in get_frontiers_res.frontiers:
             self.frontiers.append([frontier.point.x, frontier.point.y])
-            self.position_frontiers.append(self.convert_pose_to_grid_position([
-                                           frontier.point.x, frontier.point.y]))
+            position_frontier = self.convert_pose_to_grid_position([
+                frontier.point.x, frontier.point.y])
+            self.position_frontiers.append((position_frontier[0], position_frontier[1]))
         return self.frontiers, self.position_frontiers
 
     def order_frontiers(self, frontiers):
