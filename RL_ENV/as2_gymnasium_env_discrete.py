@@ -224,9 +224,11 @@ class AS2GymnasiumEnv(VecEnv):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, path_length, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx)
+
             self.activate_scan_srv.call(SetBool.Request(data=False))
             self.set_pose(drone.drone_id, frontier[0], frontier[1])
             self.activate_scan_srv.call(SetBool.Request(data=True))
+
             self.wait_for_map()
             # self.observation_manager.call_get_frontiers_with_msg(env_id=idx)
             # while self.observation_manager.wait_for_frontiers == 0:

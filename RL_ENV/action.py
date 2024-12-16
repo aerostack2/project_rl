@@ -193,7 +193,6 @@ class DiscreteValueAction:  # To be used with MaskablePPO
     def take_action(self, frontier_list, env_id) -> tuple:
         action = self.actions[env_id]
         frontier = self.select_frontier(frontier_list, action)
-
         result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
 
         return frontier, path_length, result
@@ -204,9 +203,9 @@ class DiscreteValueAction:  # To be used with MaskablePPO
     def select_frontier(self, frontier_list, action):
         chosen_action = PointStamped()
         chosen_action.header.frame_id = "earth"
-        chosen_action.point.x = frontier_list[action][0]
-        chosen_action.point.y = frontier_list[action][1]
-        self.chosen_action_pub.publish(chosen_action)
+        # chosen_action.point.x = frontier_list[action][0]
+        # chosen_action.point.y = frontier_list[action][1]
+        # self.chosen_action_pub.publish(chosen_action)
         return frontier_list[action]
 
 
@@ -272,12 +271,23 @@ class DiscreteCoordinateActionSingleEnv:  # To be used with MaskablePPO
             PointStamped, "/chosen_action", 10
         )
 
-    def take_action(self, frontier_list: list[list[int]], position_frontier_list: list[list[int]], env_id) -> tuple:
+    def take_action(self, frontier_list: list[(int, int)], position_frontier_list: list[(int, int)], env_id) -> tuple:
         action = self.actions[env_id]
-        action_coord = np.array([action % self.grid_size, action // self.grid_size])
-        action_index = np.where(np.all(position_frontier_list == action_coord, axis=1))[0][0]
+        print(f"drone {self.drone_interface_list[0].drone_id}, action {action}")
+        action_coord = (action % self.grid_size, action // self.grid_size)
+        print(f"drone {self.drone_interface_list[0].drone_id}, action_coord {action_coord}")
+        print(
+            f"drone {self.drone_interface_list[0].drone_id}, position_frontier_list {position_frontier_list}")
+        try:
+            action_index = position_frontier_list.index(action_coord)
+        except ValueError:
+            print("QUe ha pasado")
+        print(f"drone {self.drone_interface_list[0].drone_id}, index {action_index}")
+        # action_coord = np.array([action % self.grid_size, action // self.grid_size])
+        # action_index = np.where(np.all(position_frontier_list == action_coord, axis=1))[0][0]
         frontier = frontier_list[action_index]
         position_frontier = position_frontier_list[action_index]
+        print(f"drone {self.drone_interface_list[0].drone_id}, frontier: {frontier}")
         result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
             frontier)
         nav_path = []

@@ -88,7 +88,7 @@ class AS2GymnasiumEnv(VecEnv):
         # Make a drone interface with functionality to control the internal state of the drone with rl env methods
 
         # Other stuff
-        self.obstacles = self.parse_xml("assets/worlds/world2.sdf")
+        self.obstacles = self.parse_xml(f"assets/worlds/{world_name}.sdf")
         print(self.obstacles)
         self.env_index = env_index
         self.num_drones = num_drones
@@ -104,35 +104,49 @@ class AS2GymnasiumEnv(VecEnv):
         self.vec_sync = vec_sync
         self.step_lengths = step_lengths
 
+        self._action_masks = np.zeros(self.action_manager.grid_size *
+                                      self.action_manager.grid_size, dtype=bool)
+
+        self.invalid_frontiers = []
+
+        self.sync_step = True
+
     def pause_physics(self) -> bool:
         pause_physics_req = ControlWorld.Request()
         pause_physics_req.world_control.pause = True
-        pause_physics_res = self.world_control_client.call(pause_physics_req)
-        return pause_physics_res.success
+        future = self.world_control_client.call_async(pause_physics_req)
+        while rclpy.ok():
+            if future.done():
+                break
+        return future.result().success
 
     def unpause_physics(self) -> bool:
         pause_physics_req = ControlWorld.Request()
         pause_physics_req.world_control.pause = False
-        pause_physics_res = self.world_control_client.call(pause_physics_req)
-        return pause_physics_res.success
+        future = self.world_control_client.call_async(pause_physics_req)
+        while rclpy.ok():
+            if future.done():
+                break
+        return future.result().success
 
     def set_random_pose(self, model_name, drones: list[tuple[float, float]]) -> tuple[bool, Point]:
         set_model_pose_req = SetPoseWithID.Request()
         set_model_pose_req.pose.id = model_name
-        x = round(random.uniform(-self.world_size, self.world_size), 2)
-        y = round(random.uniform(-self.world_size, self.world_size), 2)
+        x = round(random.uniform(-self.world_size / 1.5, self.world_size / 1.5), 2)
+        y = round(random.uniform(-self.world_size / 1.5, self.world_size / 1.5), 2)
         drone_copy = []
         for drone in drones:
             drone_copy.append(drone)
+
         while True:
             too_close = any(
-                self.distance((x, y), obstacle) < self.min_distance for obstacle in self.obstacles + drone_copy
+                self.distance((x, y), obstacle) < self.min_distance for obstacle in (self.obstacles + drone_copy)
             )
             if not too_close:
                 break
             else:
-                x = round(random.uniform(-self.world_size, self.world_size), 2)
-                y = round(random.uniform(-self.world_size, self.world_size), 2)
+                x = round(random.uniform(-self.world_size / 1.5, self.world_size / 1.5), 2)
+                y = round(random.uniform(-self.world_size / 1.5, self.world_size / 1.5), 2)
 
         set_model_pose_req.pose.pose.position.x = x
         set_model_pose_req.pose.pose.position.y = y
@@ -144,9 +158,15 @@ class AS2GymnasiumEnv(VecEnv):
         set_model_pose_req.pose.pose.orientation.z = 0.0
         set_model_pose_req.pose.pose.orientation.w = 1.0
 
-        set_model_pose_res = self.set_pose_client.call(set_model_pose_req)
+        success = False
+        future = self.set_pose_client.call_async(request=set_model_pose_req)
+        while rclpy.ok():
+            if future.done():
+                if future.result() is not None:
+                    success = future.result().success
+                break
         # Return success and position
-        return set_model_pose_res.success, set_model_pose_req.pose.pose.position
+        return success, set_model_pose_req.pose.pose.position
 
     def set_random_pose_with_cli(self, model_name):
 
@@ -192,9 +212,16 @@ class AS2GymnasiumEnv(VecEnv):
         set_model_pose_req.pose.pose.orientation.z = 0.0
         set_model_pose_req.pose.pose.orientation.w = 1.0
 
-        set_model_pose_res = self.set_pose_client.call(set_model_pose_req)
+        # set_model_pose_res = self.set_pose_client.call(request=set_model_pose_req)
+        success = False
+        future = self.set_pose_client.call_async(request=set_model_pose_req)
+        while rclpy.ok():
+            if future.done():
+                if future.result() is not None:
+                    success = future.result().success
+                break
         # Return success and position
-        return set_model_pose_res.success, set_model_pose_req.pose.pose
+        return success, set_model_pose_req.pose.pose
 
     def set_pose_with_cli(self, model_name, x, y):
 
@@ -217,36 +244,87 @@ class AS2GymnasiumEnv(VecEnv):
         self.barrier_reset.wait()
         self.barrier_step.reset()
         print("Resetting drone", self.drone_interface_list[env_idx].drone_id)
+        self.sync_step = True
 
-        self.activate_scan_srv.call(SetBool.Request(data=False))
-        # self.pause_physics()
+        if self.env_index == 0:
+            while not self.queue.empty():
+                self.queue.get()
 
-        with self.lock:
-            self.clear_map_srv.call(Empty.Request())
+        print("queue cleared")
+        self.lock.acquire(timeout=5)
+        try:
+            future = self.activate_scan_srv.call_async(SetBool.Request(data=False))
+            while rclpy.ok():
+                if future.done():
+                    break
+        finally:
+            self.lock.release()
+
+        print("scan deactivated")
+        self.barrier_reset.wait()
+
+        if self.env_index == 0:
+            self.clear_map_srv.call_async(Empty.Request())
+            while rclpy.ok():
+                if future.done():
+                    break
+
+        print("map cleared")
+        self.lock.acquire(timeout=5)
+        try:
             _, position = self.set_random_pose(
                 self.drone_interface_list[env_idx].drone_id, self.drones_initial_position)
-            self.drones_initial_position.append((position.x, position.y))
+            print("lo intenta al menos")
 
+            print("entra aqui al menos")
+            self.drones_initial_position.append((position.x, position.y))
             if len(self.drones_initial_position) == self.num_drones:
                 for initial_position in self.drones_initial_position:
                     self.drones_initial_position.remove(initial_position)
-
             for _ in self.shared_frontiers:
                 self.shared_frontiers.pop(0)
+        finally:
+            self.lock.release()
+        # with self.lock:
+        #     self.drones_initial_position.append((position.x, position.y))
+
+        #     if len(self.drones_initial_position) == self.num_drones:
+        #         for initial_position in self.drones_initial_position:
+        #             self.drones_initial_position.remove(initial_position)
+
+        #     for _ in self.shared_frontiers:
+        #         self.shared_frontiers.pop(0)
+
+        print("Drone", self.drone_interface_list[env_idx].drone_id, " Half reset done")
+
+        self.lock.acquire(timeout=5)
+        future = self.activate_scan_srv.call_async(SetBool.Request(data=True))
+        try:
+            while rclpy.ok():
+                if future.done():
+                    break
+        finally:
+            self.lock.release()
 
         self.barrier_reset.wait()
 
-        # self.unpause_physics()
-        self.activate_scan_srv.call(SetBool.Request(data=True))
-
+        print("Drone", self.drone_interface_list[env_idx].drone_id, " Waiting for map")
         self.wait_for_map()
 
+        print("Drone", self.drone_interface_list[env_idx].drone_id, " Getting frontiers")
+
         frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
-            env_idx)
+            self.env_index)
+
+        print("Drone", self.drone_interface_list[env_idx].drone_id, " Frontiers gotten")
 
         obs = self._get_obs(env_idx)
 
+        print("Drone", self.drone_interface_list[env_idx].drone_id, " Observations gotten")
+
         self._save_obs(env_idx, obs)
+        print("Drone", self.drone_interface_list[env_idx].drone_id, " Calculating action masks")
+        self.calculate_action_masks()
 
         self.barrier_reset.wait()
 
@@ -265,6 +343,7 @@ class AS2GymnasiumEnv(VecEnv):
     def step_wait(self) -> None:
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
+            print(f"taking action drone {drone.drone_id}")
             frontier, position_frontier, path_length, path, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.observation_manager.position_frontiers, 0)
 
@@ -275,21 +354,39 @@ class AS2GymnasiumEnv(VecEnv):
 
                 frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
                     self.env_index)
+
+                self.calculate_action_masks()
+
+                self.invalid_frontiers.append(position_frontier)
+
+                self.add_frontier_to_action_mask(self.invalid_frontiers)
+
                 obs = self._get_obs(idx)
                 self._save_obs(idx, obs)
                 self.buf_infos[idx] = {}  # TODO: Add info
                 self.buf_dones[idx] = False
                 return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
-            self.activate_scan_srv.call(SetBool.Request(data=False))
+            self.invalid_frontiers = []
+
+            future = self.activate_scan_srv.call_async(SetBool.Request(data=False))
+            while rclpy.ok():
+                if future.done():
+                    break
 
             with self.lock:
-                self.shared_frontiers.append(position_frontier)
+                if position_frontier not in self.shared_frontiers:
+                    self.shared_frontiers.append(
+                        position_frontier)
+
+                print("drone", drone.drone_id, " shared frontiers: ", self.shared_frontiers)
                 self.step_lengths[self.env_index] = len(path)
 
-            if self.queue.empty():
+            if self.sync_step:
                 print("queue empty")
                 self.barrier_step.wait()
+
+            self.sync_step = False
 
             with self.condition:
                 self.condition.notify_all()
@@ -300,48 +397,83 @@ class AS2GymnasiumEnv(VecEnv):
                 except BrokenBarrierError as e:
                     print("Barrier broken")
 
-                with self.lock:
-                    length = min(self.step_lengths)
-
+                print("Drone", drone.drone_id, " substep started")
+                length = min(self.step_lengths)
+                print("Drone", drone.drone_id, " before set pose: length",
+                      length, " path length: ", len(path))
                 self.set_pose(drone.drone_id, path[length - 1][0], path[length - 1][1])
+                print("Drone", drone.drone_id, " after set pose to ", path[length - 1])
                 try:
                     self.barrier_step.wait()
                 except BrokenBarrierError as e:
                     print("Barrier broken")
+                print("Drone", drone.drone_id, " substep done")
                 if length == len(path):
-                    while not self.queue.empty():
-                        self.queue.get()
-
-                    self.queue.put(drone.drone_id)
-
+                    print("Drone", drone.drone_id, " donete ")
                     with self.lock:
                         if not any((step_length == 0) for step_length in self.step_lengths):
                             for i in range(self.num_drones):
                                 self.step_lengths[i] -= length
-
+                    print("Drone", drone.drone_id, " donete despues")
                     break
                 else:
                     path = path[length:]
-                    print(f"Drone {drone.drone_id} waiting for other drones")
                     with self.condition:
-                        self.condition.wait()
+                        print(f"Drone {drone.drone_id} waiting for other drones")
+                        self.condition.wait(timeout=5.0)
+                        print(f"Drone {drone.drone_id} woke up")
+            self.lock.acquire(timeout=5)
+            try:
+                self.wait_for_map()
+                old_map = self.observation_manager.grid_matrix
+                future = self.activate_scan_srv.call_async(SetBool.Request(data=True))
+                self.wait_for_map()
+                new_map = self.observation_manager.grid_matrix
+                while rclpy.ok():
+                    if future.done():
+                        break
+            finally:
+                self.lock.release()
 
-            self.activate_scan_srv.call(SetBool.Request(data=True))
-
+            print("Drone", drone.drone_id, " pre remove")
             with self.lock:
-                self.shared_frontiers.remove(position_frontier)
-
-            self.wait_for_map()
+                if position_frontier in self.shared_frontiers:
+                    self.shared_frontiers.remove(position_frontier)
+            print("Drone", drone.drone_id, " pre wait for map")
 
             frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
-                idx)
+                self.env_index)
 
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
 
+            max_distance = math.sqrt((self.world_size * 2)**2 + (self.world_size * 2)**2)
+
+            max_area = self.grid_size * self.grid_size
+
+            discovered_area_rew = (np.sum(old_map == self.observation_manager.UNKNOWN) -
+                                   np.sum(new_map == self.observation_manager.UNKNOWN)
+                                   ) / max_area  # Reward based on discovered area
+
+            print(f"drone {drone.drone_id} discovered area reward: {discovered_area_rew}")
+
+            path_length_rew = -(path_length / max_distance)  # Reward based on path length
+
+            distance_to_closest_drone_rew = max_distance
+
+            for drone_id, drone_position in self.observation_manager.swarm_position.items():
+                if drone_id != drone.drone_id:
+                    dist = self.distance((drone_position[0], drone_position[1]),
+                                         (drone.position[0], drone.position[1]))
+                    if dist < distance_to_closest_drone_rew:
+                        distance_to_closest_drone_rew = dist
+
+            distance_to_closest_drone_rew = distance_to_closest_drone_rew / \
+                max_distance  # Reward based on distance to closest drone
+
             self.buf_infos[idx] = {}  # TODO: Add info
-            self.buf_rews[idx] = -(path_length /
-                                   math.sqrt((self.world_size * 2)**2 + (self.world_size * 2)**2))
+            self.buf_rews[idx] = path_length_rew + \
+                distance_to_closest_drone_rew + discovered_area_rew
             self.buf_dones[idx] = False
 
             # with self.lock:
@@ -352,21 +484,39 @@ class AS2GymnasiumEnv(VecEnv):
             #     print("Shared frontiers", self.shared_frontiers)
             #     index
 
-            with self.lock:
-                for shared_frontier in self.shared_frontiers:
-                    if shared_frontier in position_frontiers:
-                        position_frontiers.remove(shared_frontier)
+            # with self.lock:
+            #     for shared_frontier in self.shared_frontiers:
+            #         if shared_frontier in position_frontiers:
+            #             position_frontiers.remove(shared_frontier)
 
             for frontier in self.observation_manager.position_frontiers:
                 if frontier in self.shared_frontiers:
                     print("Frontier already chosen")
-                    self.observation_manager.position_frontiers.remove(frontier)
+                    index = self.observation_manager.position_frontiers.index(frontier)
+                    self.observation_manager.position_frontiers.pop(index)
+                    self.observation_manager.frontiers.pop(index)
+
+            self.calculate_action_masks()
+
             print("Drone", drone.drone_id, " step done")
-            if len(self.observation_manager.position_frontiers) == 0:
+            if all(self._action_masks == False):
+                print(f"Drone{self.drone_interface_list[0].drone_id} All actions masked")
+                print(self.observation_manager.position_frontiers)
+
                 self.buf_dones[idx] = True
 
-                with self.lock:
+                self.lock.acquire(timeout=5)
+                try:
+                    if not self.queue.full():
+                        self.queue.put(drone.drone_id)
+                finally:
+                    self.lock.release()
+
+                self.lock.acquire(timeout=5)
+                try:
                     self.step_lengths[self.env_index] = 10000  # Arbitrary large number
+                finally:
+                    self.lock.release()
 
                 if not self.barrier_step.broken:
                     self.barrier_step.abort()
@@ -374,6 +524,7 @@ class AS2GymnasiumEnv(VecEnv):
                 with self.condition:
                     self.condition.notify_all()
 
+                print("Drone", drone.drone_id, " before reset")
                 self.reset_single_env(idx)
 
                 print("Drone", drone.drone_id, "done")
@@ -457,20 +608,48 @@ class AS2GymnasiumEnv(VecEnv):
             pass
         return
 
-    def action_masks(self):
-        action_masks = np.zeros(self.action_manager.grid_size *
-                                self.action_manager.grid_size, dtype=bool)
-        with self.lock:
+    def calculate_action_masks(self):
+        self._action_masks = np.zeros(self.action_manager.grid_size *
+                                      self.action_manager.grid_size, dtype=bool)
+        self.lock.acquire(timeout=5)
+        try:
+            print("in action masking, drone", self.env_index,
+                  " shared frontiers: ", self.shared_frontiers)
             for frontier in self.observation_manager.position_frontiers:
-                if frontier in self.shared_frontiers:
-                    print("Frontier already chosen")
-                    action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = False
+                if (0 > frontier[0] > self.grid_size - 1) or (0 > frontier[1] > self.grid_size - 1):
+                    print("Frontier out of bounds")
+                    self.observation_manager.position_frontiers.remove(frontier)
                 else:
-                    action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = True
-        if all(action_masks == False):
-            print(f"Drone{self.drone_interface_list[0].drone_id} All actions masked")
-            print(self.observation_manager.position_frontiers)
-        return action_masks
+                    if frontier in self.shared_frontiers:
+                        print("Frontier already chosen")
+                        self._action_masks[frontier[1] *
+                                           self.action_manager.grid_size + frontier[0]] = False
+                    else:
+                        self._action_masks[frontier[1] *
+                                           self.action_manager.grid_size + frontier[0]] = True
+            print("calculated action masks")
+        finally:
+            self.lock.release()
+            print("released lock")
+
+    def add_frontier_to_action_mask(self, frontiers):
+        for frontier in frontiers:
+            self._action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = False
+
+    def action_masks(self):
+        # action_masks = np.zeros(self.action_manager.grid_size *
+        #                         self.action_manager.grid_size, dtype=bool)
+        # with self.lock:
+        #     for frontier in self.observation_manager.position_frontiers:
+        #         if frontier in self.shared_frontiers:
+        #             print("Frontier already chosen")
+        #             action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = False
+        #         else:
+        #             action_masks[frontier[1] * self.action_manager.grid_size + frontier[0]] = True
+        # if all(action_masks == False):
+        #     print(f"Drone{self.drone_interface_list[0].drone_id} All actions masked")
+        #     print(self.observation_manager.position_frontiers)
+        return self._action_masks
 
     # def sync_reset(self, phase: int = 0):
     #     release = False

@@ -1,4 +1,5 @@
 import numpy as np
+import rclpy
 from gymnasium.spaces import Box, Dict
 from collections import OrderedDict
 from stable_baselines3.common.vec_env.util import (
@@ -16,6 +17,7 @@ from geometry_msgs.msg import PoseStamped
 # from as2_msgs.msg import GetFrontierReq
 # from as2_msgs.msg import GetFrontierRes
 from frontiers import get_frontiers, paint_frontiers
+import time
 
 
 # @dataclass
@@ -77,6 +79,7 @@ class Observation:
             ]
         )
         self.drone_interface_list = drone_interface_list
+
         # Make the necessary subscription and variables in order to get the occupancy map
         self.grid_map_sub = self.drone_interface_list[0].create_subscription(
             OccupancyGrid, "/map_server/map_filtered", self.grid_map_callback, qos_profile_sensor_data
@@ -134,6 +137,7 @@ class Observation:
 
     def grid_map_callback(self, msg: OccupancyGrid):
         # Get the grid map from the message and save it in the grid_matrix variable
+        print("entra aqui")
         if len(msg.data) == 0:
             return
         if self.wait_for_map == 1:
@@ -275,6 +279,13 @@ class Observation:
 #             self.observation_space = Box
 
 class ObservationAsync:
+
+    FREE = np.uint8(0)
+    OCCUPIED = np.uint8(1 / 4 * 255)
+    UNKNOWN = np.uint8(2 / 4 * 255)
+    FRONTIER = np.uint8(3 / 4 * 255)
+    DRONE = np.uint8(4 / 4 * 255)
+
     def __init__(self, grid_size, num_envs: int, num_drones: int, env_idx: int, drone_interface_list, policy_type: str):
         self.grid_size = grid_size
 
@@ -362,8 +373,12 @@ class ObservationAsync:
 
     def _get_obs(self, env_id):
         position = self.convert_pose_to_grid_position(self.drone_interface_list[env_id].position)
+        print("Drone ", self.env_idx, " position: ", position)
         self.put_frontiers_in_grid()
+        print("Drone ", self.env_idx, " frontiers in grid")
         self.put_other_drones_in_grid()
+        print("Drone ", self.env_idx, " drones in grid")
+        # self.save_image_as_csv("frontiers.csv")
         # self.show_image_with_frontiers()
         if self.policy_type == "MlpPolicy":
             obs = self.grid_matrix.flatten()
@@ -391,9 +406,9 @@ class ObservationAsync:
         matrix = np.rot90(matrix, k=1, axes=(0, 1))
         matrix = np.rot90(matrix, k=1, axes=(0, 1))
         # Handle other values: convert all non-zero values to (1 for occupied)
-        matrix[(matrix != -1) & (matrix != 0)] = 1 / 4 * 255
+        matrix[(matrix != -1) & (matrix != 0)] = self.OCCUPIED
         # Handle NaN values: convert NaNs to a specific value (2 for unknown)
-        matrix[matrix == -1] = 2 / 4 * 255
+        matrix[matrix == -1] = self.UNKNOWN
         # Convert to uint8 and reshape
         matrix = matrix.astype(np.uint8)
         self.grid_matrix = matrix[np.newaxis, :, :]  # Add batch dimension
@@ -427,12 +442,14 @@ class ObservationAsync:
             for dx, dy in offsets:
                 new_x, new_y = frontier_position[0] + dx, frontier_position[1] + dy
                 if 0 <= new_x < self.grid_size and 0 <= new_y < self.grid_size:  # Ensure within bounds
-                    self.grid_matrix[0, new_y, new_x] = 3 / 4 * 255
+                    self.grid_matrix[0, new_y, new_x] = self.FRONTIER
 
     def put_other_drones_in_grid(self):
+        print("Drone ", self.drone_interface_list[0].drone_id,
+              " Swarm position: ", self.swarm_position)
         for drone_id, position in self.swarm_position.items():
             if drone_id != self.drone_interface_list[0].drone_id:
-                self.grid_matrix[0, position[1], position[0]] = 4 / 4 * 255
+                self.grid_matrix[0, position[1], position[0]] = self.DRONE
 
     def show_image_with_frontiers(self):
         image = self.process_image(self.grid_matrix)
@@ -450,20 +467,24 @@ class ObservationAsync:
                     f.write(f"{cell} ")
                 f.write("\n")
 
-    def order_and_get_frontiers_and_position(self, env_id):
-        # Call the service to get the frontiers
+    def save_image_as_csv(self, path: str):
+        image = self.grid_matrix[0]
+        np.savetxt(path, image, delimiter=",")
 
-        get_frontiers_req = GetFrontiers.Request()
-        get_frontiers_req.explorer_id = f"drone{env_id}"
-        get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
-        self.frontiers = []
-        self.position_frontiers = []
-        for frontier in get_frontiers_res.frontiers:
-            self.frontiers.append([frontier.point.x, frontier.point.y])
-        self.frontiers = self.order_frontiers(self.frontiers)
-        for frontier in self.frontiers:
-            self.position_frontiers.append(self.convert_pose_to_grid_position(frontier))
-        return self.frontiers, self.position_frontiers
+    # def order_and_get_frontiers_and_position(self, env_id):
+    #     # Call the service to get the frontiers
+
+    #     get_frontiers_req = GetFrontiers.Request()
+    #     get_frontiers_req.explorer_id = f"drone{env_id}"
+    #     get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
+    #     self.frontiers = []
+    #     self.position_frontiers = []
+    #     for frontier in get_frontiers_res.frontiers:
+    #         self.frontiers.append([frontier.point.x, frontier.point.y])
+    #     self.frontiers = self.order_frontiers(self.frontiers)
+    #     for frontier in self.frontiers:
+    #         self.position_frontiers.append(self.convert_pose_to_grid_position(frontier))
+    #     return self.frontiers, self.position_frontiers
 
     # def call_get_frontiers_with_msg(self, env_id):
     #     get_frontiers_req = GetFrontierReq()
@@ -478,7 +499,21 @@ class ObservationAsync:
     def get_frontiers_and_position(self, env_id):
         get_frontiers_req = GetFrontiers.Request()
         get_frontiers_req.explorer_id = f"drone{env_id}"
-        get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
+        future = self.get_frontiers_srv.call_async(get_frontiers_req)
+        then = self.drone_interface_list[0].get_clock().now().to_msg().sec
+        while rclpy.ok():
+            if future.done():
+                if future.result() is not None:
+                    get_frontiers_res = future.result()
+                    break
+                else:
+                    print(f"Drone{env_id} service call failed, calling again...")
+                    future = self.get_frontiers_srv.call_async(get_frontiers_req)
+            if self.drone_interface_list[0].get_clock().now().to_msg().sec - then > 1.0:
+                print(f"Drone{env_id} service call timeout, calling again...")
+                future = self.get_frontiers_srv.call_async(get_frontiers_req)
+                then = self.drone_interface_list[0].get_clock().now().to_msg().sec
+
         self.frontiers = []
         self.position_frontiers = []
         for frontier in get_frontiers_res.frontiers:

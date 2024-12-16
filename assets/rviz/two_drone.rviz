@@ -5,9 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /TF1
-        - /Drone21
         - /Marker1/Topic1
-        - /GridMap2
         - /Path21
         - /Path31
       Splitter Ratio: 0.5058823823928833
@@ -29,7 +27,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: LaserScan
+    SyncSource: ""
   - Class: as2_rviz_plugins/Teleop
     Name: Teleop
     drone_ns: drone0
@@ -398,32 +396,6 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /drone1/robot_description
-      Enabled: true
-      Links:
-        All Links Enabled: true
-        Expand Joint Details: false
-        Expand Link Details: false
-        Expand Tree: false
-        Link Tree Style: Links in Alphabetic Order
-      Mass Properties:
-        Inertia: false
-        Mass: false
-      Name: Drone1
-      TF Prefix: drone1
-      Update Interval: 0
-      Value: true
-      Visual Enabled: true
-    - Alpha: 1
-      Class: rviz_default_plugins/RobotModel
-      Collision Enabled: false
-      Description File: ""
-      Description Source: Topic
-      Description Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
         Value: /drone2/robot_description
       Enabled: true
       Links:
@@ -437,6 +409,32 @@ Visualization Manager:
         Mass: false
       Name: Drone2
       TF Prefix: drone2
+      Update Interval: 0
+      Value: true
+      Visual Enabled: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /drone1/robot_description
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: Drone1
+      TF Prefix: drone1
       Update Interval: 0
       Value: true
       Visual Enabled: true
@@ -541,7 +539,7 @@ Visualization Manager:
       Class: rviz_default_plugins/Map
       Color Scheme: map
       Draw Behind: true
-      Enabled: true
+      Enabled: false
       Name: ObstacleMap
       Topic:
         Depth: 5
@@ -557,7 +555,7 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /drone0/obstacle_map_updates
       Use Timestamp: false
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: true
       Name: Path
@@ -672,7 +670,7 @@ Visualization Manager:
       Color: 153; 193; 241
       Color Layer: /drone0
       Color Transformer: IntensityLayer
-      Enabled: true
+      Enabled: false
       Height Layer: /drone0
       Height Transformer: Flat
       History Length: 1
@@ -691,14 +689,14 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /map_server/grid_map
       Use Rainbow: false
-      Value: true
+      Value: false
     - Alpha: 0.5
       Autocompute Intensity Bounds: true
       Class: grid_map_rviz_plugin/GridMap
       Color: 246; 97; 81
       Color Layer: /drone1
       Color Transformer: IntensityLayer
-      Enabled: true
+      Enabled: false
       Height Layer: /drone1
       Height Transformer: Flat
       History Length: 1
@@ -717,7 +715,7 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /map_server/grid_map
       Use Rainbow: false
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/Marker
       Enabled: true
       Name: Path1
@@ -735,7 +733,7 @@ Visualization Manager:
       Enabled: true
       Name: Path2
       Namespaces:
-        {}
+        map_server: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -748,7 +746,7 @@ Visualization Manager:
       Enabled: true
       Name: Path3
       Namespaces:
-        {}
+        map_server: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -803,7 +801,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 47.13471984863281
+      Distance: 40.539005279541016
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1

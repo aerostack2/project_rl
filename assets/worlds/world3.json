@@ -30,11 +30,24 @@
                 }
             ]
         },
-    
         {
             "model_type": "quadrotor_base",
             "model_name": "drone2",
             "xyz": [9.55, 1.28, 0],
+            "rpy": [0, 0, 2.38],
+            "flight_time": 60,
+            "payload": [
+                {
+                    "model_type": "planar_lidar",
+                    "model_name": "lidar",
+                    "xyz": [0, 0, -0.5]
+                }
+            ]
+        },
+        {
+            "model_type": "quadrotor_base",
+            "model_name": "drone3",
+            "xyz": [-8.67, -0.16, 0],
             "rpy": [0, 0, 2.38],
             "flight_time": 60,
             "payload": [

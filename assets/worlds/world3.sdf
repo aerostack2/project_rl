@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 
 <sdf version="1.6">
-    <world name="world2">
+    <world name="world3">
         <gravity>0 0 0</gravity>
         <physics name="4ms" type="ignored">
             <max_step_size>0.004</max_step_size>

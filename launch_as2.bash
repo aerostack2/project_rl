@@ -47,7 +47,7 @@ launch_keyboard_teleop=${launch_keyboard_teleop:="false"}
 
 simulation_config="assets/worlds/world2.json" 
 if [[ ${swarm} == "true" ]]; then
-  simulation_config="assets/worlds/world2.json"
+  simulation_config="assets/worlds/world3.json"
 fi
 
 drones=($(python3 utils/get_drones.py ${simulation_config} --sep ' '))

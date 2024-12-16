@@ -9,8 +9,7 @@ import cProfile
 import pstats
 import torch
 import numpy as np
-from multiprocessing import Manager, Lock, Barrier, Condition, Queue
-import multiprocessing
+from torch.multiprocessing import Manager, Lock, Barrier, Condition, Queue
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
@@ -72,6 +71,7 @@ class Training:
             n_epochs=n_epochs,
             learning_rate=learning_rate,
             device="cpu",
+            tensorboard_log=f"./tensorboard/{self.env.env_index}",
             policy_kwargs=dict(
                 net_arch=dict(pi=pi_net_arch, vf=vf_net_arch),
                 features_extractor_class=CustomCombinedExtractor,
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     barrier_reset = Barrier(4)
     barrier_step = Barrier(4)
     condition = Condition()
-    queue = Queue()
+    queue = Queue(maxsize=3)
     shared_frontiers = manager.list()
     drones_initial_positions = manager.list()
     vec_sync = manager.list([False, False, False, False])
@@ -191,7 +191,7 @@ if __name__ == "__main__":
 
     def make_training_0():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=0, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=0, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )
@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
     def make_training_1():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=1, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=1, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )
@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
     def make_training_2():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=2, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=2, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )
@@ -218,7 +218,7 @@ if __name__ == "__main__":
 
     def make_training_3():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=1.0, num_envs=1, num_drones=4, env_index=3, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=3, policy_type="MultiInputPolicy",
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )

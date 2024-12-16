@@ -8,8 +8,7 @@ import cProfile
 import pstats
 import torch
 import numpy as np
-from multiprocessing import Manager, Lock, Barrier, Condition, Queue
-import multiprocessing
+from torch.multiprocessing import Manager, Lock, Barrier, Condition, Queue
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
