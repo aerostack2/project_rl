@@ -288,15 +288,15 @@ class DiscreteCoordinateActionSingleEnv:  # To be used with MaskablePPO
         frontier = frontier_list[action_index]
         position_frontier = position_frontier_list[action_index]
         print(f"drone {self.drone_interface_list[0].drone_id}, frontier: {frontier}")
-        result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
+        success, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
             frontier)
         nav_path = []
-        if result:
+        if success:
             for point in path:
                 nav_path.append([point.x, point.y])
             # path_simplified = rdp(nav_path, epsilon=0.1)
             path_length = self.path_length(nav_path)
-        return frontier, position_frontier, path_length, nav_path, result
+        return frontier, position_frontier, path_length, nav_path, success
 
     def generate_random_action(self):
         return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]

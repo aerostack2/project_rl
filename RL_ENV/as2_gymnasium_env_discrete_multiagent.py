@@ -398,6 +398,8 @@ class AS2GymnasiumEnv(VecEnv):
                     print("Barrier broken")
 
                 print("Drone", drone.drone_id, " substep started")
+                with self.condition:
+                    self.condition.wait_for(lambda: min(self.step_lengths) != 0)
                 length = min(self.step_lengths)
                 print("Drone", drone.drone_id, " before set pose: length",
                       length, " path length: ", len(path))
@@ -435,7 +437,7 @@ class AS2GymnasiumEnv(VecEnv):
             finally:
                 self.lock.release()
 
-            print("Drone", drone.drone_id, " pre remove")
+            print("Drone", drone.drone_id, " pre remove frontiers")
             with self.lock:
                 if position_frontier in self.shared_frontiers:
                     self.shared_frontiers.remove(position_frontier)
