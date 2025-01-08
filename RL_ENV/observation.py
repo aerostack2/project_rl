@@ -509,10 +509,9 @@ class ObservationAsync:
             if future.done():
                 if future.result() is not None:
                     get_frontiers_res = future.result()
-                    break
-                else:
-                    print(f"Drone{env_id} service call failed, calling again...")
-                    future = self.get_frontiers_srv.call_async(get_frontiers_req)
+                    if get_frontiers_res.success:
+                        break
+
             if time.time() - then > 1.0:
                 print(f"Drone{env_id} service call timeout, calling again...")
                 future = self.get_frontiers_srv.call_async(get_frontiers_req)

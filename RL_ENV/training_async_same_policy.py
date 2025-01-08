@@ -8,6 +8,8 @@ import rclpy
 import cProfile
 import pstats
 import torch
+from torch.distributions.constraints import Constraint
+from torch.distributions import constraints
 import numpy as np
 from torch.multiprocessing import Manager, Lock, Barrier, Condition, Queue
 from stable_baselines3 import PPO
@@ -52,6 +54,18 @@ class CustomCallback(BaseCallback):
 
 class SharedPolicyManager(BaseManager):
     pass
+
+class CustomSimplex(Constraint):
+    """
+    Constrain to the unit simplex in the innermost (rightmost) dimension.
+    Specifically: `x >= 0` and `x.sum(-1) == 1`.
+    """
+
+    event_dim = 1
+
+    def check(self, value):
+
+        return torch.all(value >= 0, dim=-1) & ((value.sum(-1) - 1).abs() < 1e-4)
 
 
 class Training:
@@ -161,6 +175,9 @@ if __name__ == "__main__":
     # First three for reset
 
     step_lengths = manager.list([10000.0, 10000.0, 10000.0, 10000.0])
+
+    torch.distributions.Categorical.arg_constraints = {
+        "probs": CustomSimplex(), "logits": constraints.real_vector}  # Modify simplex constrain to be less restrictive
 
     rclpy.init()
 
