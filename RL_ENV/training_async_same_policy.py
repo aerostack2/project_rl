@@ -17,7 +17,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-from sb3_contrib.common.maskable.policies import MaskableMultiInputActorCriticPolicy
+from sb3_contrib.common.maskable.policies import MaskableMultiInputActorCriticPolicy, MaskableActorCriticPolicy
 from sb3_contrib.common.wrappers import ActionMasker
 from concurrent_ppo_mask import MaskablePPO
 from stable_baselines3.common.utils import get_schedule_fn
@@ -148,17 +148,8 @@ if __name__ == "__main__":
                         default=[128, 128], help="Policy network architecture")
     parser.add_argument("--vf_net_arch", type=list,
                         default=[128, 128], help="Value function network architecture")
+    parser.add_argument("--policy_type", type=str, default="MlpPolicy", help="Policy type")
     args = parser.parse_args()
-
-    observation_space = Dict(
-        {
-            "image": Box(
-                low=0, high=255, shape=(1, 200, 200), dtype=np.uint8
-            ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown, 3: frontier point
-            "position": Box(low=0, high=200 - 1, shape=(2,), dtype=np.int32),
-            # Position of the drone in the grid
-        }
-    )
 
     action_space = Discrete(200 * 200)
 
@@ -181,26 +172,62 @@ if __name__ == "__main__":
 
     rclpy.init()
 
-    SharedPolicyManager.register('MaskableMultiInputActorCriticPolicy',
-                                 MaskableMultiInputActorCriticPolicy)
-    manager = SharedPolicyManager()
-    manager.start()
-
-    policy_kwargs = dict(
-        activation_fn=torch.nn.ReLU,
-        net_arch=dict(pi=[128, 128], vf=[128, 128]),
-        features_extractor_class=CustomCombinedExtractor
-    )
+    policy_class = args.policy_type
     learning_rate = 0.00005
 
-    # multiprocessing.set_start_method('spawn', force=True)
+    if policy_class == "MultiInputPolicy":
+        observation_space = Dict(
+            {
+                "image": Box(
+                    low=0, high=255, shape=(1, 200, 200), dtype=np.uint8
+                ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown, 3: frontier point
+                "position": Box(low=0, high=200 - 1, shape=(2,), dtype=np.int32),
+                # Position of the drone in the grid
+            }
+        )
 
-    policy = manager.MaskableMultiInputActorCriticPolicy(  # type: ignore[assignment]
-        observation_space,
-        action_space,
-        (0.0, learning_rate),
-        **policy_kwargs,
-    )
+        SharedPolicyManager.register('MaskableMultiInputActorCriticPolicy',
+                                    MaskableMultiInputActorCriticPolicy)
+        manager = SharedPolicyManager()
+        manager.start()
+
+        policy_kwargs = dict(
+            # activation_fn=torch.nn.ReLU,
+            net_arch=dict(pi=[128, 128], vf=[128, 128]),
+            features_extractor_class=CustomCombinedExtractor
+        )
+
+        # multiprocessing.set_start_method('spawn', force=True)
+
+        policy = manager.MaskableMultiInputActorCriticPolicy(  # type: ignore[assignment]
+            observation_space,
+            action_space,
+            (0.0, learning_rate),
+            **policy_kwargs,
+        )
+
+    elif policy_class == "MlpPolicy":
+ 
+        observation_space = Box(low=0, high=1, shape=(
+                200 * 200 + 2,), dtype=np.float32)
+        SharedPolicyManager.register('MaskableActorCriticPolicy',
+                                     MaskableActorCriticPolicy)
+        manager = SharedPolicyManager()
+        manager.start()
+
+        policy_kwargs = dict(
+            # activation_fn=torch.nn.ReLU,
+            net_arch=dict(pi=[128, 128], vf=[128, 128])
+        )
+    
+        policy = manager.MaskableActorCriticPolicy(  # type: ignore[assignment]
+            observation_space,
+            action_space,
+            (0.0, learning_rate),
+            **policy_kwargs,
+        )
+
+
     policy = policy.to("cpu")
     policy.share_memory()
 
@@ -208,7 +235,7 @@ if __name__ == "__main__":
 
     def make_training_0():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=0, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=0, policy_type=args.policy_type,
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )
@@ -217,7 +244,7 @@ if __name__ == "__main__":
 
     def make_training_1():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=1, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=1, policy_type=args.policy_type,
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )
@@ -226,7 +253,7 @@ if __name__ == "__main__":
 
     def make_training_2():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=2, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=2, policy_type=args.policy_type,
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )
@@ -235,7 +262,7 @@ if __name__ == "__main__":
 
     def make_training_3():
         env = AS2GymnasiumEnv(world_name="world3", world_size=10.0,
-                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=3, policy_type="MultiInputPolicy",
+                              grid_size=200, min_distance=3.0, num_envs=1, num_drones=4, env_index=3, policy_type=args.policy_type,
                               shared_frontiers=shared_frontiers, lock=lock, barrier_reset=barrier_reset, barrier_step=barrier_step, condition=condition, queue=queue,
                               drones_initial_position=drones_initial_positions, vec_sync=vec_sync, step_lengths=step_lengths
                               )

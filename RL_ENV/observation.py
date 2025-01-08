@@ -126,7 +126,7 @@ class Observation:
         if self.policy_type == "MlpPolicy":
             obs = self.grid_matrix.flatten().astype(np.float32)
             obs = obs / 255
-            position = position / self.grid_size
+            position = position / (self.grid_size - 1)
             position = position.astype(np.float32)
             obs = np.append(obs, position)
         elif self.policy_type == "MultiInputPolicy":
@@ -385,8 +385,10 @@ class ObservationAsync:
         # self.save_image_as_csv("frontiers.csv")
         # self.show_image_with_frontiers()
         if self.policy_type == "MlpPolicy":
-            obs = self.grid_matrix.flatten()
-            obs = np.append(obs, position)
+            obs = self.grid_matrix.flatten().astype(np.float32)
+            obs = obs / 255
+            position = np.array(position, dtype=np.float32)
+            obs = np.append(obs, position / (self.grid_size - 1))
         elif self.policy_type == "MultiInputPolicy":
             obs = {"image": self.grid_matrix, "position": position}
         self.wait_for_map = 0
@@ -439,14 +441,17 @@ class ObservationAsync:
             (0, 0), (0, 1), (0, -1), (1, 0), (-1, 0),
             (1, 1), (-1, -1), (1, -1), (-1, 1)
         ]
+
         for frontier in self.frontiers:
             frontier_position = self.convert_pose_to_grid_position(frontier)
             # paint a square around the frontier
-
-            for dx, dy in offsets:
-                new_x, new_y = frontier_position[0] + dx, frontier_position[1] + dy
-                if 0 <= new_x < self.grid_size and 0 <= new_y < self.grid_size:  # Ensure within bounds
-                    self.grid_matrix[0, new_y, new_x] = self.FRONTIER
+            if self.policy_type == "MultiInputPolicy":
+                for dx, dy in offsets:
+                    new_x, new_y = frontier_position[0] + dx, frontier_position[1] + dy
+                    if 0 <= new_x < self.grid_size and 0 <= new_y < self.grid_size:  # Ensure within bounds
+                        self.grid_matrix[0, new_y, new_x] = self.FRONTIER
+            elif self.policy_type == "MlpPolicy":
+                self.grid_matrix[0, frontier_position[1], frontier_position[0]] = self.FRONTIER
 
     def put_other_drones_in_grid(self):
         print("Drone ", self.drone_interface_list[0].drone_id,
