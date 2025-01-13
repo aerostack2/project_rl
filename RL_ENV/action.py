@@ -281,7 +281,8 @@ class DiscreteCoordinateActionSingleEnv:  # To be used with MaskablePPO
         try:
             action_index = position_frontier_list.index(action_coord)
         except ValueError:
-            print("QUe ha pasado")
+            return None, action_coord, None, None, False
+
         print(f"drone {self.drone_interface_list[0].drone_id}, index {action_index}")
         # action_coord = np.array([action % self.grid_size, action // self.grid_size])
         # action_index = np.where(np.all(position_frontier_list == action_coord, axis=1))[0][0]

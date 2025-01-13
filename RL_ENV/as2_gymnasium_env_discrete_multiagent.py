@@ -410,7 +410,10 @@ class AS2GymnasiumEnv(VecEnv):
                 except BrokenBarrierError as e:
                     print("Barrier broken")
                 print("Drone", drone.drone_id, " substep done")
-                if length == len(path):
+                if all(value == self.step_lengths[0] for value in self.step_lengths):
+                    for i in range(self.num_drones):
+                        self.step_lengths[i] = 0
+                elif length == len(path):
                     print("Drone", drone.drone_id, " donete ")
                     with self.lock:
                         if not any((step_length == 0) for step_length in self.step_lengths):
@@ -617,6 +620,8 @@ class AS2GymnasiumEnv(VecEnv):
         try:
             print("in action masking, drone", self.env_index,
                   " shared frontiers: ", self.shared_frontiers)
+            print("in action masking, drone", self.env_index,
+                  " position frontiers: ", self.observation_manager.position_frontiers)
             for frontier in self.observation_manager.position_frontiers:
                 if (0 > frontier[0] > self.grid_size - 1) or (0 > frontier[1] > self.grid_size - 1):
                     print("Frontier out of bounds")
