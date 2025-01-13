@@ -432,11 +432,21 @@ class AS2GymnasiumEnv(VecEnv):
                 self.wait_for_map()
                 old_map = self.observation_manager.grid_matrix
                 future = self.activate_scan_srv.call_async(SetBool.Request(data=True))
-                self.wait_for_map()
-                new_map = self.observation_manager.grid_matrix
+                then = time.time()
                 while rclpy.ok():
                     if future.done():
-                        break
+                        if future.result() is not None:
+                            activate_scan_res = future.result()
+                            if activate_scan_res.success:
+                                break
+                    if time.time() - then > 1.0:
+                        print(f"Drone{self.env_index} service call timeout, calling again...")
+                        future = self.activate_scan_srv.call_async(
+                            SetBool.Request(data=True))
+                        then = time.time()
+
+                self.wait_for_map()
+                new_map = self.observation_manager.grid_matrix
             finally:
                 self.lock.release()
 
