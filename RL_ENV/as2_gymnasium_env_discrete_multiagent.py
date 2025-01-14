@@ -365,6 +365,10 @@ class AS2GymnasiumEnv(VecEnv):
                 self._save_obs(idx, obs)
                 self.buf_infos[idx] = {}  # TODO: Add info
                 self.buf_dones[idx] = False
+
+                # Checks if all actions are masked, if so, ends the episode for that drone
+                self.check_end_episode_cond(idx, drone)
+
                 return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
             self.invalid_frontiers = []
@@ -513,36 +517,9 @@ class AS2GymnasiumEnv(VecEnv):
 
             self.calculate_action_masks()
 
+            self.check_end_episode_cond(idx, drone)
+
             print("Drone", drone.drone_id, " step done")
-            if all(self._action_masks == False):
-                print(f"Drone{self.drone_interface_list[0].drone_id} All actions masked")
-                print(self.observation_manager.position_frontiers)
-
-                self.buf_dones[idx] = True
-
-                self.lock.acquire(timeout=5)
-                try:
-                    if not self.queue.full():
-                        self.queue.put(drone.drone_id)
-                finally:
-                    self.lock.release()
-
-                self.lock.acquire(timeout=5)
-                try:
-                    self.step_lengths[self.env_index] = 10000  # Arbitrary large number
-                finally:
-                    self.lock.release()
-
-                if not self.barrier_step.broken:
-                    self.barrier_step.abort()
-
-                with self.condition:
-                    self.condition.notify_all()
-
-                print("Drone", drone.drone_id, " before reset")
-                self.reset_single_env(idx)
-
-                print("Drone", drone.drone_id, "done")
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 
@@ -622,6 +599,37 @@ class AS2GymnasiumEnv(VecEnv):
         while self.observation_manager.wait_for_map == 0:
             pass
         return
+
+    def check_end_episode_cond(self, idx, drone: DroneInterfaceTeleop):
+        if all(self._action_masks == False):
+            print(f"Drone{self.drone_interface_list[0].drone_id} All actions masked")
+            print(self.observation_manager.position_frontiers)
+
+            self.buf_dones[idx] = True
+
+            self.lock.acquire(timeout=5)
+            try:
+                if not self.queue.full():
+                    self.queue.put(drone.drone_id)
+            finally:
+                self.lock.release()
+
+            self.lock.acquire(timeout=5)
+            try:
+                self.step_lengths[self.env_index] = 10000  # Arbitrary large number
+            finally:
+                self.lock.release()
+
+            if not self.barrier_step.broken:
+                self.barrier_step.abort()
+
+            with self.condition:
+                self.condition.notify_all()
+
+            print("Drone", drone.drone_id, " before reset")
+            self.reset_single_env(idx)
+
+            print("Drone", drone.drone_id, "done")
 
     def calculate_action_masks(self):
         self._action_masks = np.zeros(self.action_manager.grid_size *
