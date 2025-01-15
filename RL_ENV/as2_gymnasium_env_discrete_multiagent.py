@@ -414,9 +414,8 @@ class AS2GymnasiumEnv(VecEnv):
                 except BrokenBarrierError as e:
                     print("Barrier broken")
                 print("Drone", drone.drone_id, " substep done")
-                if all(value == self.step_lengths[0] for value in self.step_lengths):
-                    for i in range(self.num_drones):
-                        self.step_lengths[i] = 0
+                if all(step_length == self.step_lengths[0] for step_length in self.step_lengths):
+                    break
                 elif length == len(path):
                     print("Drone", drone.drone_id, " donete ")
                     with self.lock:
