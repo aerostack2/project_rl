@@ -8,12 +8,12 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 
-from sb3_contrib.common.maskable.policies import MaskableMultiInputActorCriticPolicy
+from sb3_contrib.common.maskable.policies import MaskableMultiInputActorCriticPolicy, MaskableActorCriticCnnPolicy
 from sb3_contrib.common.wrappers import ActionMasker
 from sb3_contrib.ppo_mask import MaskablePPO
 
 from as2_gymnasium_env_discrete import AS2GymnasiumEnv
-from custom_cnn import CustomCombinedExtractor
+from custom_cnn import CustomCombinedExtractor, NatureCNN_Mod
 
 import argparse
 
@@ -73,7 +73,7 @@ class Training:
         print(
             f"Training with n_steps={n_steps}, batch_size={batch_size}, n_epochs={n_epochs}, learning_rate={learning_rate}, pi_net_arch={pi_net_arch}, vf_net_arch={vf_net_arch}")
         model = MaskablePPO(
-            MaskableMultiInputActorCriticPolicy,
+            MaskableActorCriticCnnPolicy,
             self.env,
             verbose=1,
             tensorboard_log="./tensorboard/",
@@ -83,12 +83,11 @@ class Training:
             learning_rate=learning_rate,
             policy_kwargs=dict(
                 activation_fn=th.nn.ReLU,
-                net_arch=dict(pi=pi_net_arch, vf=vf_net_arch),
-                features_extractor_class=CustomCombinedExtractor,
+                features_extractor_class=NatureCNN_Mod,
             )
         )
         model.learn(
-            total_timesteps=80000,
+            total_timesteps=16,
             callback=self.custom_callback,
         )
 
@@ -127,7 +126,7 @@ if __name__ == "__main__":
 
     rclpy.init()
     env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
-                          grid_size=200, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
+                          grid_size=200, min_distance=1.0, num_envs=1, policy_type="CnnPolicy")
     #
     env = VecMonitor(env)
     # env = ActionMasker(env.venv, action_mask_fn=Training.mask_fn)

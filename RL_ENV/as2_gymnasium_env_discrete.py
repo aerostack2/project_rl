@@ -24,7 +24,7 @@ from copy import deepcopy
 
 import xml.etree.ElementTree as ET
 
-from observation import Observation
+from observation import MultiChannelImageObservation as Observation
 from action import DiscreteCoordinateAction as Action
 from frontiers import get_frontiers, paint_frontiers
 
@@ -238,8 +238,10 @@ class AS2GymnasiumEnv(VecEnv):
             obs = self._get_obs(idx)
             self._save_obs(idx, obs)
             self.buf_infos[idx] = {}  # TODO: Add info
-            self.buf_rews[idx] = -(path_length /
-                                   math.sqrt((self.world_size * 2)**2 + (self.world_size * 2)**2))
+
+            max_distance = math.sqrt((self.world_size * 2)**2 + (self.world_size * 2)**2)
+
+            self.buf_rews[idx] = -(path_length / max_distance)  # Reward based on path length
             self.buf_dones[idx] = False
             if len(frontiers) == 0:  # No frontiers left, episode ends
                 self.buf_dones[idx] = True

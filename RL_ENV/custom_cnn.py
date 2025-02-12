@@ -72,7 +72,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
         # Concatenate the features from all spaces into a single tensor
         return th.cat(encoded_tensor_list, dim=1)
-    
+
 
 class NatureCNN_Mod(BaseFeaturesExtractor):
     """
@@ -116,13 +116,11 @@ class NatureCNN_Mod(BaseFeaturesExtractor):
         )
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
+            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=2),  # Input: 4 channels
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
-            nn.ReLU(),
-            nn.Flatten(),
+            nn.Flatten()
         )
 
         # Compute shape by doing one forward pass
@@ -133,7 +131,8 @@ class NatureCNN_Mod(BaseFeaturesExtractor):
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
-    
+
+
 class CustomOccupancyCNN_5(BaseFeaturesExtractor):
     """
     CNN from DQN Nature paper:
@@ -153,7 +152,7 @@ class CustomOccupancyCNN_5(BaseFeaturesExtractor):
     def __init__(
         self,
         observation_space: gym.Space,
-        features_dim: int = 512,
+        features_dim: int = 256,
         normalized_image: bool = False,
     ) -> None:
         assert isinstance(observation_space, spaces.Box), (
@@ -193,7 +192,8 @@ class CustomOccupancyCNN_5(BaseFeaturesExtractor):
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
-    
+
+
 class CustomOccupancyCNN_4(BaseFeaturesExtractor):
     """
     CNN from DQN Nature paper:
@@ -255,7 +255,7 @@ class CustomOccupancyCNN_4(BaseFeaturesExtractor):
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
-    
+
 
 class CustomOccupancyCNN_3(BaseFeaturesExtractor):
     """
