@@ -295,7 +295,7 @@ class MultiChannelImageObservation:
             self.observation_space = Dict(
                 {
                     "image": Box(
-                        low=0, high=255, shape=(1, grid_size, grid_size), dtype=np.uint8
+                        low=0, high=255, shape=(4, grid_size, grid_size), dtype=np.uint8
                     ),  # Ocuppancy grid map: 0: free, 1: occupied, 2: unknown, 3: frontier point
                     "position": Box(low=0, high=grid_size - 1, shape=(2,), dtype=np.int32),
                     # Position of the drone in the grid
@@ -304,7 +304,7 @@ class MultiChannelImageObservation:
 
         elif policy_type == "CnnPolicy":
             self.observation_space = Box(
-                low=0, high=255, shape=(5, grid_size, grid_size), dtype=np.uint8
+                low=0, high=255, shape=(4, grid_size, grid_size), dtype=np.uint8
             )
 
         self.policy_type = policy_type
@@ -337,10 +337,11 @@ class MultiChannelImageObservation:
         #     GetFrontierRes, "/get_frontiers_res", self.get_frontiers_callback, 1
         # )
 
-        self.grid_matrix = np.zeros((5, grid_size, grid_size), dtype=np.uint8)
+        self.grid_matrix = np.zeros((4, grid_size, grid_size), dtype=np.uint8)
 
         self.frontiers = []  # List of frontiers by coordinates in earth
         self.position_frontiers = []  # List of frontiers by coordinates in grid
+        self.action_mask = []
         self.chosen_frontiers = []  # List of frontiers chosen by the drones
         self.wait_for_map = 1
         self.wait_for_frontiers = 0
@@ -358,11 +359,10 @@ class MultiChannelImageObservation:
     def _get_obs(self, env_id):
         position = self.convert_pose_to_grid_position(self.drone_interface_list[env_id].position)
         self.put_position_in_grid(position)
-        self.put_frontiers_in_grid()
+        # self.put_frontiers_in_grid()
         # self.put_drone_in_grid(env_id)
         # self.show_image_with_frontiers()
-        self.save_image_as_csv("frontiers/frontiers.csv", self.grid_matrix[2])
-        # self.save_image_as_txt("frontiers.txt")
+        # self.save_image_as_csv("frontiers/frontiers.csv", self.grid_matrix[0])
         if self.policy_type == "MlpPolicy":
             obs = self.grid_matrix.flatten().astype(np.float32)
             obs = obs / 255
@@ -425,7 +425,7 @@ class MultiChannelImageObservation:
 
         position_matrix = self.add_gaussian_blob_max(position_matrix, position, 3, 1)
 
-        self.grid_matrix[4] = position_matrix * 255
+        self.grid_matrix[3] = position_matrix * 255
 
     def add_gaussian_blob_max(self, grid, center, sigma=3, amplitude=1):
         """
@@ -488,28 +488,6 @@ class MultiChannelImageObservation:
         image = matrix
         np.savetxt(path, image, delimiter=",")
 
-    # def order_and_get_frontiers_and_position(self, env_id):
-    #     # Call the service to get the frontiers
-
-    #     get_frontiers_req = GetFrontiers.Request()
-    #     get_frontiers_req.explorer_id = f"drone{env_id}"
-    #     get_frontiers_res = self.get_frontiers_srv.call(get_frontiers_req)
-    #     self.frontiers = []
-    #     self.position_frontiers = []
-    #     for frontier in get_frontiers_res.frontiers:
-    #         self.frontiers.append([frontier.point.x, frontier.point.y])
-    #     self.frontiers = self.order_frontiers(self.frontiers)
-    #     for frontier in self.frontiers:
-    #         self.position_frontiers.append(self.convert_pose_to_grid_position(frontier))
-    #     return self.frontiers, self.position_frontiers
-
-    # def call_get_frontiers_with_msg(self, env_id):
-    #     get_frontiers_req = GetFrontierReq()
-    #     get_frontiers_req.explorer_id = f"drone{env_id}"
-    #     self.get_frontiers_pub.publish(get_frontiers_req)
-    #     self.wait_for_frontiers = 0
-    #     self.wait_for_map = 0
-
     def get_frontiers_and_position_with_msg(self, env_id):
         return self.frontiers, self.position_frontiers
 
@@ -521,10 +499,14 @@ class MultiChannelImageObservation:
         self.position_frontiers = []
         for frontier in get_frontiers_res.frontiers:
             self.frontiers.append([frontier.point.x, frontier.point.y])
-            position_frontier = self.convert_pose_to_grid_position([
-                frontier.point.x, frontier.point.y])
-            self.position_frontiers.append((position_frontier[0], position_frontier[1]))
+            # position_frontier = self.convert_pose_to_grid_position([
+            #     frontier.point.x, frontier.point.y])
+            # self.position_frontiers.append((position_frontier[0], position_frontier[1]))
         return self.frontiers, self.position_frontiers
+
+    def get_action_mask(self, env_id):
+        action_mask = self.grid_matrix[0].astype(bool).flatten()
+        return action_mask
 
     def order_frontiers(self, frontiers):
         # Order frontiers from left to right and top to bottom

@@ -93,7 +93,7 @@ class NatureCNN_Mod(BaseFeaturesExtractor):
     def __init__(
         self,
         observation_space: gym.Space,
-        features_dim: int = 512,
+        features_dim: int = 256,
         normalized_image: bool = False,
     ) -> None:
         assert isinstance(observation_space, spaces.Box), (
@@ -116,10 +116,13 @@ class NatureCNN_Mod(BaseFeaturesExtractor):
         )
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=2),  # Input: 4 channels
+            nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4),  # Input: 4 channels
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten()
         )
 

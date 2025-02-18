@@ -16,7 +16,7 @@
 
         # PathPlanner parameters
         use_path_optimizer: false
-        safety_distance: 0.4
+        safety_distance: 0.0
 
         # Explorer parameters
         reached_dist_thresh: 0.2
