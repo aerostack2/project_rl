@@ -79,13 +79,14 @@ class Training:
             tensorboard_log="./tensorboard/",
             n_steps=n_steps,
             batch_size=batch_size,
-            gamma=0.95,
+            gamma=0.97,
             n_epochs=n_epochs,
             learning_rate=learning_rate,
             policy_kwargs=dict(
                 activation_fn=th.nn.ReLU,
                 net_arch=dict(pi=pi_net_arch, vf=vf_net_arch),
                 features_extractor_class=NatureCNN_Mod,
+                share_features_extractor=False
             )
         )
         model.learn(
