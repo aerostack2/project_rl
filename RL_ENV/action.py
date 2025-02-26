@@ -209,6 +209,60 @@ class DiscreteValueAction:  # To be used with MaskablePPO
         return frontier_list[action]
 
 
+class DiscreteFrontierIndexAction:  # To be used with MaskablePPO
+    def __init__(self, drone_interface_list, grid_size):
+        self.dims = [grid_size, grid_size]
+        self.action_space = Discrete(grid_size * grid_size)
+        self.drone_interface_list = drone_interface_list
+        self.actions = []
+        self.generate_path_action_client_list = []
+        self.grid_size = grid_size
+        for drone_interface in self.drone_interface_list:
+            self.generate_path_action_client_list.append(
+                PathActionClient(
+                    drone_interface
+                )
+            )
+        self.chosen_action_pub = self.drone_interface_list[0].create_publisher(
+            PointStamped, "/chosen_action", 10
+        )
+
+    def convert_grid_position_to_pose(self, grid_position: np.ndarray) -> list[float]:
+        desp = self.grid_size / 2
+        # grid_position[0] corresponds to x (derived from pose[1])
+        # grid_position[1] corresponds to y (derived from pose[0])
+        pose_1 = (desp - grid_position[0]) / 10.0  # This recovers pose[1]
+        pose_0 = (desp - grid_position[1]) / 10.0  # This recovers pose[0]
+        return [pose_0, pose_1]
+
+    def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id) -> tuple:
+        action = self.actions[env_id]
+        # action_coord = np.array([action % self.grid_size, action // self.grid_size])
+        # action = self.convert_grid_position_to_pose(action_coord)
+        # frontier = frontier_list[action_index]
+        # result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        frontier = grid_frontier_list[action]
+        frontier = self.convert_grid_position_to_pose(frontier)
+        result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
+            frontier)
+        nav_path = []
+        if result:
+            for point in path:
+                nav_path.append([point.x, point.y])
+            # path_simplified = rdp(nav_path, epsilon=0.1)
+            path_length = self.path_length(nav_path)
+
+        return action, path_length, result
+
+    def generate_random_action(self):
+        return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]
+
+    def path_length(self, path):
+        points = np.array(path)
+
+        return np.sum(np.linalg.norm(points[1:] - points[:-1], axis=1))
+
+
 class DiscreteCoordinateAction:  # To be used with MaskablePPO
     def __init__(self, drone_interface_list, grid_size):
         self.dims = [grid_size, grid_size]
@@ -237,12 +291,12 @@ class DiscreteCoordinateAction:  # To be used with MaskablePPO
 
     def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id) -> tuple:
         action = self.actions[env_id]
-        action_coord = np.array([action % self.grid_size, action // self.grid_size])
-        action = self.convert_grid_position_to_pose(action_coord)
-        # frontier = frontier_list[action_index]
+        # action_coord = np.array([action % self.grid_size, action // self.grid_size])
+        # action = self.convert_grid_position_to_pose(action_coord)
+        frontier = frontier_list[action]
         # result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
         result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
-            action)
+            frontier)
         nav_path = []
         if result:
             for point in path:
@@ -250,7 +304,7 @@ class DiscreteCoordinateAction:  # To be used with MaskablePPO
             # path_simplified = rdp(nav_path, epsilon=0.1)
             path_length = self.path_length(nav_path)
 
-        return action, path_length, result
+        return frontier, path_length, result
 
     def generate_random_action(self):
         return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]

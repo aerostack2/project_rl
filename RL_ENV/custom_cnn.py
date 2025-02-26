@@ -122,7 +122,6 @@ class NatureCNN_Mod(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(64, 128, kernel_size=3, stride=2),
             nn.ReLU(),
-            nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten()
         )
 
