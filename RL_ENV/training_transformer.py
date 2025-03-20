@@ -8,7 +8,7 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 
-from RL_ENV.custom_policy_pointer import ActorCriticCnnPolicy, ActorCriticPolicy
+from RL_ENV.custom_policy_transformer import ActorCriticCnnPolicy, ActorCriticPolicy
 from custom_ppo import PPO
 
 from as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
@@ -88,7 +88,7 @@ class Training:
             )
         )
         model.learn(
-            total_timesteps=50000,
+            total_timesteps=100000,
             callback=self.custom_callback,
         )
 
