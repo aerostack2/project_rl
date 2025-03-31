@@ -28,7 +28,7 @@ from stable_baselines3.common.distributions import (
 from stable_baselines3.common.preprocessing import preprocess_obs
 from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from torch import nn
-from transformer_network import TransformerExtractor
+from attention_network import AttentionExtractor
 from custom_cnn import NatureCNN_Mod
 
 
@@ -135,7 +135,6 @@ class ActorCriticPolicy(BasePolicy):
         # else:
         #     self.pi_features_extractor = self.features_extractor
         #     self.vf_features_extractor = self.make_features_extractor_cnn()
-        self.features_dim = self.features_dim_cnn + self.features_dim_flatten
 
         self.log_std_init = log_std_init
         dist_kwargs = None
@@ -204,16 +203,17 @@ class ActorCriticPolicy(BasePolicy):
         #       net_arch here is an empty list and mlp_extractor does not
         #       really contain any layers (acts like an identity module).
         self.mlp_extractor = MlpExtractor(
-            self.features_dim,
+            self.features_dim_flatten,
             net_arch=self.net_arch,
             activation_fn=self.activation_fn,
             device=self.device,
         )
 
-    def _build_transformer_extractor(self) -> None:
+    def _build_attention_extractor(self) -> None:
 
-        self.transformer_extractor = TransformerExtractor(
-            self.features_dim,
+        self.attention_extractor = AttentionExtractor(
+            self.features_dim_flatten,
+            self.features_dim_cnn,
             net_arch=self.net_arch,
             activation_fn=self.activation_fn,
             device=self.device,
@@ -226,7 +226,7 @@ class ActorCriticPolicy(BasePolicy):
         :param lr_schedule: Learning rate schedule
             lr_schedule(1) is the initial learning rate
         """
-        self._build_transformer_extractor()
+        self._build_attention_extractor()
 
         # latent_dim_pi = self.mlp_extractor.latent_dim_pi
 
@@ -243,7 +243,7 @@ class ActorCriticPolicy(BasePolicy):
         # else:
         #     raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
 
-        self.value_net = nn.Linear(self.transformer_extractor.latent_dim_vf, 1)
+        self.value_net = nn.Linear(self.attention_extractor.latent_dim_vf, 1)
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
@@ -254,31 +254,31 @@ class ActorCriticPolicy(BasePolicy):
             module_gains = {
                 self.features_extractor_cnn: np.sqrt(2),
                 self.features_extractor_flatten: np.sqrt(2),
-                # self.transformer_extractor.encoder: np.sqrt(2),
-                # self.transformer_extractor.actor_mlp: np.sqrt(2),
-                # self.transformer_extractor.critic_encoder: np.sqrt(2),
-                # self.transformer_extractor.critic_mlp: np.sqrt(2),
-                # self.transformer_extractor.actor_score: 0.01,  # Lower gain for final output layer
+                # self.attention_extractor.encoder: np.sqrt(2),
+                # self.attention_extractor.actor_mlp: np.sqrt(2),
+                # self.attention_extractor.critic_encoder: np.sqrt(2),
+                # self.attention_extractor.critic_mlp: np.sqrt(2),
+                # self.attention_extractor.actor_score: 0.01,  # Lower gain for final output layer
                 # self.action_net: 0.01,
                 self.value_net: 1,
             }
-            for name, module in self.transformer_extractor.named_modules():
-                if isinstance(module, nn.Linear):
-                    # Final output layer: actor_score
-                    if "actor_score" in name:
-                        gain = 0.01
-                    # Check if the module is part of a Transformer encoder (self-attention)
-                    elif "transformer_actor" in name or "transformer_critic" in name:
-                        if "in_proj" in name or "out_proj" in name:
-                            gain = 1.0
-                        else:
-                            gain = math.sqrt(2)
-                    else:
-                        gain = math.sqrt(2)
+            # for name, module in self.attention_extractor.named_modules():
+            #     if isinstance(module, nn.Linear):
+            #         # Final output layer: actor_score
+            #         if "actor_score" in name:
+            #             gain = 0.01
+            #         # Check if the module is part of a Transformer encoder (self-attention)
+            #         elif "transformer_actor" in name or "transformer_critic" in name:
+            #             if "in_proj" in name or "out_proj" in name:
+            #                 gain = 1.0
+            #             else:
+            #                 gain = math.sqrt(2)
+            #         else:
+            #             gain = math.sqrt(2)
 
-                    nn.init.orthogonal_(module.weight, gain=gain)
-                    if module.bias is not None:
-                        nn.init.constant_(module.bias, 0)
+            #         nn.init.orthogonal_(module.weight, gain=gain)
+            #         if module.bias is not None:
+            #             nn.init.constant_(module.bias, 0)
 
             if not self.share_features_extractor:
                 # Note(antonin): this is to keep SB3 results
@@ -320,14 +320,14 @@ class ActorCriticPolicy(BasePolicy):
             flatenned_features = self.extract_features(spaces.Box(low=0.0, high=1.0, shape=(
                 5,), dtype=np.float32),
                 frontier_feature, self.features_extractor_flatten)
-            concat_features = th.cat((cnn_features, flatenned_features), dim=1)
-            frontier_features_list.append(concat_features)
+            # concat_features = th.cat((cnn_features, flatenned_features), dim=1)
+            frontier_features_list.append(flatenned_features)
 
         # Shape (batch_size, num_candidates, n_features_dim)
         features = th.stack(frontier_features_list, dim=1)
 
         if self.share_features_extractor:
-            logits_pi, latent_vf = self.transformer_extractor([features])
+            logits_pi, latent_vf = self.attention_extractor([features], [cnn_features])
 
         print(f"shape of logits: {logits_pi.shape}")
         print(f"shape of latent_vf: {latent_vf.shape}")
@@ -429,6 +429,7 @@ class ActorCriticPolicy(BasePolicy):
         # Preprocess the observation if needed
         # Preprocess the observation if needed
         frontier_features_batched = []
+        cnn_features_batched = []
         log_prob_batched = []
         entropy_batched = []
         frontier_features_list = []
@@ -439,14 +440,17 @@ class ActorCriticPolicy(BasePolicy):
                 flatenned_features = self.extract_features(spaces.Box(low=0.0, high=1.0, shape=(
                     5,), dtype=np.float32),
                     frontier_feature, self.features_extractor_flatten)
-                concat_features = th.cat((cnn_features[i].unsqueeze(0), flatenned_features), dim=1)
-                frontier_features_list.append(concat_features)
+                # concat_features = th.cat((cnn_features[i].unsqueeze(0), flatenned_features), dim=1)
+                frontier_features_list.append(flatenned_features)
             # Shape (batch_size, num_candidates, n_features_dim)
             features = th.stack(frontier_features_list, dim=1)
             frontier_features_batched.append(features)
             frontier_features_list = []
 
-            logits_pi = self.transformer_extractor.forward_actor([features])
+            logits_pi = self.attention_extractor.forward_actor(
+                [features], [cnn_features[i].unsqueeze(0)])
+
+            cnn_features_batched.append(cnn_features[i].unsqueeze(0))
 
             distribution = self._get_action_dist_from_latent(logits_pi)
             log_prob = distribution.log_prob(actions[i])
@@ -454,7 +458,8 @@ class ActorCriticPolicy(BasePolicy):
             entropy = distribution.entropy()
             entropy_batched.append(entropy)
 
-        latent_vf = self.transformer_extractor.forward_critic(frontier_features_batched)
+        latent_vf = self.attention_extractor.forward_critic(
+            frontier_features_batched, cnn_features_batched)
         values = self.value_net(latent_vf)
 
         return values, th.cat(log_prob_batched, dim=0), th.cat(entropy_batched, dim=0)
@@ -480,7 +485,7 @@ class ActorCriticPolicy(BasePolicy):
         # Shape (batch_size, num_candidates, n_features_dim)
         features = th.stack(frontier_features_list, dim=1)
 
-        logits_pi = self.transformer_extractor.forward_actor([features])
+        logits_pi = self.attention_extractor.forward_actor([features], [cnn_features])
 
         return self._get_action_dist_from_latent(logits_pi)
 
@@ -499,13 +504,13 @@ class ActorCriticPolicy(BasePolicy):
             flatenned_features = self.extract_features(spaces.Box(low=0.0, high=1.0, shape=(
                 5,), dtype=np.float32),
                 frontier_feature, self.features_extractor_flatten)
-            concat_features = th.cat((cnn_features, flatenned_features), dim=1)
-            frontier_features_list.append(concat_features)
+            # concat_features = th.cat((cnn_features, flatenned_features), dim=1)
+            frontier_features_list.append(flatenned_features)
 
         # Shape (batch_size, num_candidates, n_features_dim)
         features = th.stack(frontier_features_list, dim=1)
 
-        latent_vf = self.transformer_extractor.forward_critic([features])
+        latent_vf = self.attention_extractor.forward_critic([features], [cnn_features])
 
         return self.value_net(latent_vf)
 

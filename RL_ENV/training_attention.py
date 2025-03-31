@@ -8,7 +8,7 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 
-from custom_policy_transformer import ActorCriticCnnPolicy, ActorCriticPolicy
+from custom_policy_attention import ActorCriticCnnPolicy, ActorCriticPolicy
 from custom_ppo import PPO
 
 from as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
@@ -114,9 +114,9 @@ class Training:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Perform training of the model")
-    parser.add_argument("--n_steps", type=int, default=1024,
+    parser.add_argument("--n_steps", type=int, default=16,
                         help="Number of steps in the environment")
-    parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
     parser.add_argument("--n_epochs", type=int, default=5, help="Number of epochs")
     parser.add_argument("--learning_rate", type=float, default=0.0003, help="Learning rate")
     parser.add_argument("--pi_net_arch", type=list,

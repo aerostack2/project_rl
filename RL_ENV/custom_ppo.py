@@ -14,10 +14,9 @@ from as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.buffers import DictRolloutBuffer
 # from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
-from custom_policy_transformer import ActorCriticPolicy, ActorCriticCnnPolicy, MultiInputActorCriticPolicy, BasePolicy
+from custom_policy_attention import ActorCriticPolicy, ActorCriticCnnPolicy, MultiInputActorCriticPolicy, BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
-from pointer_network import PointerExtractor
 
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
