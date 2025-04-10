@@ -10,11 +10,11 @@ from torch.nn import functional as F
 from custom_buffer import RolloutBuffer
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import VecEnv
-from as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
+from environments.as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.buffers import DictRolloutBuffer
 # from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
-from custom_policy_attention import ActorCriticPolicy, ActorCriticCnnPolicy, MultiInputActorCriticPolicy, BasePolicy
+from .policies.custom_policy_attention import ActorCriticPolicy, ActorCriticCnnPolicy, MultiInputActorCriticPolicy, BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor
 

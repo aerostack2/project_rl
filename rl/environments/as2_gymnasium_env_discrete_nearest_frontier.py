@@ -18,16 +18,17 @@ from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from typing import Any, List, Type
 import math
 import numpy as np
+import matplotlib.pyplot as plt
 from transforms3d.euler import euler2quat
 import random
 import time
 from copy import deepcopy
 
 import xml.etree.ElementTree as ET
+import pandas as pd
 
-from observation import MultiChannelImageObservationWithFrontierFeatures as Observation
-from action import DiscreteCoordinateAction as Action
-from frontiers import get_frontiers, paint_frontiers
+from observation.observation import MultiChannelImageObservationWithFrontierFeatures as Observation
+from action.heuristic_action import NearestFrontierAction as Action
 
 
 class AS2GymnasiumEnv(VecEnv):
@@ -41,6 +42,7 @@ class AS2GymnasiumEnv(VecEnv):
         self.set_pose_client = self.drone_interface_list[0].create_client(
             SetPoseWithID, f"/world/{world_name}/set_pose"
         )
+        self.set_pose_client.wait_for_service(timeout_sec=5.0)
         self.world_control_client = self.drone_interface_list[0].create_client(
             ControlWorld, f"/world/{world_name}/control"
         )
@@ -83,7 +85,8 @@ class AS2GymnasiumEnv(VecEnv):
 
         # Other stuff
         self.obstacles = self.parse_xml("assets/worlds/world2.sdf")
-        self.reset_counter = 0
+        self.cum_path_length = []
+        self.total_path_length = 0
         print(self.obstacles)
 
     def pause_physics(self) -> bool:
@@ -127,39 +130,6 @@ class AS2GymnasiumEnv(VecEnv):
         # Return success and position
         return set_model_pose_res.success, set_model_pose_req.pose.pose
 
-    def set_random_pose_with_cli(self, model_name):
-
-        x = round(random.uniform(-self.world_size, self.world_size), 2)
-        y = round(random.uniform(-self.world_size, self.world_size), 2)
-        while True:
-            too_close = any(
-                self.distance((x, y), obstacle) < self.min_distance for obstacle in self.obstacles
-            )
-            if not too_close:
-                break
-            else:
-                x = round(random.uniform(-self.world_size, self.world_size), 2)
-                y = round(random.uniform(-self.world_size, self.world_size), 2)
-
-        yaw = round(random.uniform(0, 2 * math.pi), 2)
-        quat = euler2quat(0, 0, yaw)
-
-        command = (
-            '''gz service -s /world/''' + self.world_name + '''/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 -r "name: ''' +
-            "'" + f'{model_name}' + "'" + ''', position: {x: ''' + str(x) + ''', y: ''' + str(y) +
-            ''', z: ''' + str(1.0) + '''}, orientation: {x: 0, y: 0, z: 0, w: 1}"'''
-        )
-        print(command)
-
-        pro = subprocess.Popen("exec " + command, stdout=subprocess.PIPE,
-                               shell=True, preexec_fn=os.setsid)
-        pro.communicate()
-
-        pro.wait()
-        pro.kill()
-        # Return success and position
-        return
-
     def set_pose(self, model_name, x, y) -> tuple[bool, Pose]:
         set_model_pose_req = SetPoseWithID.Request()
         set_model_pose_req.pose.id = model_name
@@ -193,6 +163,7 @@ class AS2GymnasiumEnv(VecEnv):
         return
 
     def reset_single_env(self, env_idx):
+        self.total_path_length = 0
         self.activate_scan_srv.call(SetBool.Request(data=False))
         self.pause_physics()
         self.clear_map_srv.call(Empty.Request())
@@ -227,33 +198,23 @@ class AS2GymnasiumEnv(VecEnv):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, path_length, result = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx)
+            # Go to closest frontier
 
             if not result:
                 print("Failed to reach goal")
                 self.buf_dones[idx] = False
-                self.buf_rews[idx] = -1.0
-                action = np.array([self.action_manager.actions[0] % self.grid_size,
-                                  self.action_manager.actions[0] // self.grid_size])
-                print(
-                    f"action: {action}")
-                print(
-                    f"which correspond to coordinate: \
-                    {self.action_manager.convert_grid_position_to_pose(action)}")
+                self.wait_for_map()
+                frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
+                    idx)
             else:
-                old_map = np.copy(self.observation_manager.grid_matrix[0])
+                # old_map = np.copy(self.observation_manager.grid_matrix[0])
+
                 self.activate_scan_srv.call(SetBool.Request(data=False))
                 self.set_pose(drone.drone_id, frontier[0], frontier[1])
                 self.activate_scan_srv.call(SetBool.Request(data=True))
                 self.wait_for_map()
-                # new_map = np.copy(self.observation_manager.grid_matrix[0])
-
-                # max_area = self.grid_size * self.grid_size
-                # discovered_area_rew = (np.sum(old_map == 0) -
-                #                        np.sum(new_map == 0)
-                #                        ) / max_area  # Reward based on discovered area
                 frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
                     idx)
-
                 obs = self._get_obs(idx)
                 self._save_obs(idx, obs)
                 self.buf_infos[idx] = {}  # TODO: Add info
@@ -262,17 +223,11 @@ class AS2GymnasiumEnv(VecEnv):
 
                 self.buf_rews[idx] = -(path_length / max_distance)
                 self.buf_dones[idx] = False
-                self.reset_counter += 1
-
-                # if self.reset_counter > 128:
-                #     self.buf_dones[idx] = True
-                #     print("episode ended")
-                #     self.buf_rews[idx] = -1.0
-                #     self.reset_single_env(idx)
-                # Max limit 128 steps
+                self.total_path_length += path_length
 
                 if len(frontiers) == 0:  # No frontiers left, episode ends
                     self.buf_dones[idx] = True
+                    self.cum_path_length.append(self.total_path_length)
                     self.buf_rews[idx] = 10.0
                     self.reset_single_env(idx)
 
@@ -369,26 +324,33 @@ if __name__ == "__main__":
     env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
                           grid_size=200, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
     env.reset()
-    env.wait_for_map()
-    env.observation_manager._get_obs(0)
-    # print("Start mission")
-    # #### ARM OFFBOARD #####
-    # print("Arm")
-    # env.drone_interface_list[0].offboard()
-    # time.sleep(1.0)
-    # print("Offboard")
-    # env.drone_interface_list[0].arm()
-    # time.sleep(1.0)
+    num_episodes = 100
+    episodes = list(range(1, num_episodes + 1))
+    episode_count = 0
+    for _ in range(num_episodes):
+        while (env.step_wait()[2][0] == False):
+            pass
+        episode_count += 1
+        print("Episode:", episode_count)
 
-    # ##### TAKE OFF #####
-    # print("Take Off")
-    # env.drone_interface_list[0].takeoff(1.0, speed=1.0)
-    # time.sleep(1.0)
+    accumulated_path = np.cumsum(env.cum_path_length)
+    # Save to CSV
+    df = pd.DataFrame({
+        'episode': episodes,
+        'path_length': env.cum_path_length,
+        'accumulated_path_length': accumulated_path
+    })
+    df.to_csv('path_data.csv', index=False)
 
-    # env.reset()
-    # for i in range(10):
-    #     env.step_wait()
-    #     # print('number of frontiers:', len(env.observation_manager.frontiers))
-    #     # env.observation_manager.show_image_with_frontiers()
-    #     # time.sleep(2.0)
+    # Optional: plot the data
+    plt.figure(figsize=(8, 5))
+    plt.plot(df['episode'], df['accumulated_path_length'], marker='o')
+    plt.xlabel('Episode')
+    plt.ylabel('Accumulated Path Length')
+    plt.title('Accumulated Path Length per Episode')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    env.drone_interface_list[0].shutdown()
     rclpy.shutdown()

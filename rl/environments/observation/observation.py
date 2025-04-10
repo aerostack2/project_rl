@@ -17,7 +17,7 @@ from as2_msgs.srv import GetFrontiers
 from geometry_msgs.msg import PoseStamped
 # from as2_msgs.msg import GetFrontierReq
 # from as2_msgs.msg import GetFrontierRes
-from frontiers import get_frontiers, paint_frontiers
+# from frontiers import get_frontiers, paint_frontiers
 import time
 
 

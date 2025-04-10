@@ -4,15 +4,16 @@ import pstats
 import torch as th
 import numpy as np
 
-# from stable_baselines3 import PPO
+from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 
-from custom_policy_attention import ActorCriticCnnPolicy, ActorCriticPolicy
-from custom_ppo import PPO
+from sb3_contrib.common.maskable.policies import MaskableMultiInputActorCriticPolicy, MaskableActorCriticCnnPolicy
+from sb3_contrib.common.wrappers import ActionMasker
+from sb3_contrib.ppo_mask import MaskablePPO
 
-from as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
-from custom_cnn import CustomCombinedExtractor, NatureCNN_Mod
+from environments.as2_gymnasium_env_discrete_free import AS2GymnasiumEnv
+from algorithms.policies.features_extractors.custom_cnn import CustomCombinedExtractor, NatureCNN_Mod
 
 import argparse
 
@@ -68,16 +69,17 @@ class Training:
     #     # helpful method we can rely on.
     #     return env.valid_action_mask()
 
-    def train(self, n_steps: int = 128, batch_size: int = 32, n_epochs: int = 5, learning_rate: float = 0.0003, pi_net_arch: list = [64, 64], vf_net_arch: list = [64, 64]):
+    def train(self, n_steps: int = 128, batch_size: int = 32, n_epochs: int = 5, learning_rate: float = 0.00005, pi_net_arch: list = [64, 64], vf_net_arch: list = [64, 64]):
         print(
             f"Training with n_steps={n_steps}, batch_size={batch_size}, n_epochs={n_epochs}, learning_rate={learning_rate}, pi_net_arch={pi_net_arch}, vf_net_arch={vf_net_arch}")
-        model = PPO(
-            ActorCriticPolicy,
+        model = MaskablePPO(
+            MaskableActorCriticCnnPolicy,
             self.env,
             verbose=1,
             tensorboard_log="./tensorboard/",
             n_steps=n_steps,
             batch_size=batch_size,
+            gamma=0.97,
             n_epochs=n_epochs,
             learning_rate=learning_rate,
             policy_kwargs=dict(
@@ -88,7 +90,7 @@ class Training:
             )
         )
         model.learn(
-            total_timesteps=100000,
+            total_timesteps=8,
             callback=self.custom_callback,
         )
 
@@ -114,11 +116,11 @@ class Training:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Perform training of the model")
-    parser.add_argument("--n_steps", type=int, default=16,
+    parser.add_argument("--n_steps", type=int, default=8,
                         help="Number of steps in the environment")
-    parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
-    parser.add_argument("--n_epochs", type=int, default=5, help="Number of epochs")
-    parser.add_argument("--learning_rate", type=float, default=0.0003, help="Learning rate")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
+    parser.add_argument("--n_epochs", type=int, default=1, help="Number of epochs")
+    parser.add_argument("--learning_rate", type=float, default=0.00005, help="Learning rate")
     parser.add_argument("--pi_net_arch", type=list,
                         default=[64, 64], help="Policy network architecture")
     parser.add_argument("--vf_net_arch", type=list,

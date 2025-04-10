@@ -27,8 +27,8 @@ from stable_baselines3.common.distributions import (
 from stable_baselines3.common.preprocessing import preprocess_obs
 from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from torch import nn
-from pointer_network import PointerExtractor
-from custom_cnn import NatureCNN_Mod
+from features_extractors.pointer_network import PointerExtractor
+from features_extractors.custom_cnn import NatureCNN_Mod
 
 
 class ActorCriticPolicy(BasePolicy):

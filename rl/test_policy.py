@@ -19,7 +19,8 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from sb3_contrib.common.envs import InvalidActionEnvDiscrete
 
-from as2_gymnasium_env_discrete import AS2GymnasiumEnv
+from environments.as2_gymnasium_env_discrete import AS2GymnasiumEnv
+
 
 class CustomCallback(BaseCallback):
     """
@@ -44,6 +45,7 @@ class CustomCallback(BaseCallback):
         # Compute and log the means of the rewards and lengths
         pass
 
+
 class Test:
     def __init__(self, env: AS2GymnasiumEnv, custom_callback: CustomCallback, path: str):
         self.env = env
@@ -53,6 +55,7 @@ class Test:
     def test(self):
         mean_reward, std_reward = evaluate_policy(self.model, self.env, 100)
         print(f"mean_reward:{mean_reward:.2f} +/- {std_reward:.2f}")
+
 
 if __name__ == '__main__':
     rclpy.init()

@@ -2,7 +2,7 @@ from async_vector_env import AsyncPPO
 from as2_gymnasium_env_discrete_multiagent import AS2GymnasiumEnv
 from gymnasium.spaces import Box, Dict, Discrete
 import argparse
-from custom_cnn import CustomCombinedExtractor
+from RL_ENV.policies.custom_cnn import CustomCombinedExtractor
 import time
 import rclpy
 import cProfile
@@ -54,6 +54,7 @@ class CustomCallback(BaseCallback):
 
 class SharedPolicyManager(BaseManager):
     pass
+
 
 class CustomSimplex(Constraint):
     """
@@ -148,7 +149,7 @@ if __name__ == "__main__":
                         default=[128, 128], help="Policy network architecture")
     parser.add_argument("--vf_net_arch", type=list,
                         default=[128, 128], help="Value function network architecture")
-    parser.add_argument("--policy_type", type=str, default="MlpPolicy", help="Policy type")
+    parser.add_argument("--policy_type", type=str, default="MultiInputPolicy", help="Policy type")
     args = parser.parse_args()
 
     action_space = Discrete(200 * 200)
@@ -187,12 +188,12 @@ if __name__ == "__main__":
         )
 
         SharedPolicyManager.register('MaskableMultiInputActorCriticPolicy',
-                                    MaskableMultiInputActorCriticPolicy)
+                                     MaskableMultiInputActorCriticPolicy)
         manager = SharedPolicyManager()
         manager.start()
 
         policy_kwargs = dict(
-            # activation_fn=torch.nn.ReLU,
+            activation_fn=torch.nn.ReLU,
             net_arch=dict(pi=[128, 128], vf=[128, 128]),
             features_extractor_class=CustomCombinedExtractor
         )
@@ -207,9 +208,9 @@ if __name__ == "__main__":
         )
 
     elif policy_class == "MlpPolicy":
- 
+
         observation_space = Box(low=0, high=1, shape=(
-                200 * 200 + 2,), dtype=np.float32)
+            200 * 200 + 2,), dtype=np.float32)
         SharedPolicyManager.register('MaskableActorCriticPolicy',
                                      MaskableActorCriticPolicy)
         manager = SharedPolicyManager()
@@ -219,14 +220,13 @@ if __name__ == "__main__":
             # activation_fn=torch.nn.ReLU,
             net_arch=dict(pi=[128, 128], vf=[128, 128])
         )
-    
+
         policy = manager.MaskableActorCriticPolicy(  # type: ignore[assignment]
             observation_space,
             action_space,
             (0.0, learning_rate),
             **policy_kwargs,
         )
-
 
     policy = policy.to("cpu")
     policy.share_memory()

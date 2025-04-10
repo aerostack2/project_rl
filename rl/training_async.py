@@ -1,7 +1,7 @@
 from async_vector_env import AsyncPPO
 from as2_gymnasium_env_discrete_multiagent import AS2GymnasiumEnv
 import argparse
-from custom_cnn import CustomCombinedExtractor
+from RL_ENV.policies.custom_cnn import CustomCombinedExtractor
 import time
 import rclpy
 import cProfile
