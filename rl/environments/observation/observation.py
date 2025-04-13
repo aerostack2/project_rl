@@ -682,7 +682,7 @@ class MultiChannelImageObservationWithFrontierFeatures:
 
         self.grid_matrix[3] = position_matrix * 255
 
-    def add_gaussian_blob_max(self, grid, center, sigma=3, amplitude=1):
+    def add_gaussian_blob_max(self, grid, center, sigma=10, amplitude=5):
         """
         Adds a Gaussian blob to the input grid at the specified center,
         but uses the maximum value where blobs overlap.

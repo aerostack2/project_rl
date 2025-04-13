@@ -9,17 +9,14 @@ import pstats
 import torch as th
 
 # from stable_baselines3 import PPO
-# from stable_baselines3.common.evaluation import evaluate_policy
-from sb3_contrib.common.maskable.evaluation import evaluate_policy
+from evaluate_policy import evaluate_policy
+# from sb3_contrib.common.maskable.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback, EvalCallback
-from sb3_contrib.ppo_mask import MaskablePPO
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-from stable_baselines3.common.vec_env import VecEnv
-from stable_baselines3.common.monitor import Monitor
+from algorithms.custom_ppo import PPO
+from algorithms.policies.custom_policy_attention import ActorCriticCnnPolicy, ActorCriticPolicy
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
-from sb3_contrib.common.envs import InvalidActionEnvDiscrete
 
-from environments.as2_gymnasium_env_discrete import AS2GymnasiumEnv
+from environments.as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
 
 
 class CustomCallback(BaseCallback):
@@ -50,19 +47,20 @@ class Test:
     def __init__(self, env: AS2GymnasiumEnv, custom_callback: CustomCallback, path: str):
         self.env = env
         self.custom_callback = custom_callback
-        self.model = MaskablePPO.load(path, self.env)
+        self.model = PPO.load(path, self.env)
 
     def test(self):
-        mean_reward, std_reward = evaluate_policy(self.model, self.env, 100)
+        mean_reward, std_reward = evaluate_policy(self.model.policy, self.env, 10)
         print(f"mean_reward:{mean_reward:.2f} +/- {std_reward:.2f}")
+        self.env.drone_interface_list[0].shutdown()
 
 
 if __name__ == '__main__':
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world1", world_size=2.5,
-                          grid_size=50, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
+    env = AS2GymnasiumEnv(world_name="world_density_high", world_size=10.0,
+                          grid_size=200, min_distance=1.0, num_envs=1, policy_type="CnnPolicy")
     env = VecMonitor(env)
     custom_callback = CustomCallback()
-    test = Test(env, custom_callback, "tensorboard/TRAINING_9_DISCRETE/ppo_as2_gymnasium.zip")
+    test = Test(env, custom_callback, "ppo_as2_gymnasium.zip")
     test.test()
     rclpy.shutdown()

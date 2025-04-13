@@ -82,8 +82,9 @@ class AS2GymnasiumEnv(VecEnv):
         # Make a drone interface with functionality to control the internal state of the drone with rl env methods
 
         # Other stuff
-        self.obstacles = self.parse_xml("assets/worlds/world2.sdf")
-        self.reset_counter = 0
+        self.obstacles = self.parse_xml(f"assets/worlds/{world_name}.sdf")
+        self.cum_path_length = []
+        self.total_path_length = 0
         print(self.obstacles)
 
     def pause_physics(self) -> bool:
@@ -193,6 +194,7 @@ class AS2GymnasiumEnv(VecEnv):
         return
 
     def reset_single_env(self, env_idx):
+        self.total_path_length = 0
         self.activate_scan_srv.call(SetBool.Request(data=False))
         self.pause_physics()
         self.clear_map_srv.call(Empty.Request())
@@ -211,7 +213,6 @@ class AS2GymnasiumEnv(VecEnv):
             return self.reset_single_env(env_idx)
         obs = self._get_obs(env_idx)
         self._save_obs(env_idx, obs)
-        self.reset_counter = 0
         return obs
 
     def reset(self, **kwargs) -> VecEnvObs:
@@ -231,16 +232,11 @@ class AS2GymnasiumEnv(VecEnv):
             if not result:
                 print("Failed to reach goal")
                 self.buf_dones[idx] = False
-                self.buf_rews[idx] = -1.0
-                action = np.array([self.action_manager.actions[0] % self.grid_size,
-                                  self.action_manager.actions[0] // self.grid_size])
-                print(
-                    f"action: {action}")
-                print(
-                    f"which correspond to coordinate: \
-                    {self.action_manager.convert_grid_position_to_pose(action)}")
+                self.wait_for_map()
+                frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
+                    idx)
             else:
-                old_map = np.copy(self.observation_manager.grid_matrix[0])
+                # old_map = np.copy(self.observation_manager.grid_matrix[0])
                 self.activate_scan_srv.call(SetBool.Request(data=False))
                 self.set_pose(drone.drone_id, frontier[0], frontier[1])
                 self.activate_scan_srv.call(SetBool.Request(data=True))
@@ -262,18 +258,11 @@ class AS2GymnasiumEnv(VecEnv):
 
                 self.buf_rews[idx] = -(path_length / max_distance)
                 self.buf_dones[idx] = False
-                self.reset_counter += 1
-
-                # if self.reset_counter > 128:
-                #     self.buf_dones[idx] = True
-                #     print("episode ended")
-                #     self.buf_rews[idx] = -1.0
-                #     self.reset_single_env(idx)
-                # Max limit 128 steps
+                self.total_path_length += path_length
 
                 if len(frontiers) == 0:  # No frontiers left, episode ends
                     self.buf_dones[idx] = True
-                    self.buf_rews[idx] = 10.0
+                    self.cum_path_length.append(self.total_path_length)
                     self.reset_single_env(idx)
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))

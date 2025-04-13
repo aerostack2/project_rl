@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 
 from observation.observation import MultiChannelImageObservationWithFrontierFeatures as Observation
-from action.heuristic_action import NearestFrontierAction as Action
+from action.heuristic_action import TAREAction as Action
 
 
 class AS2GymnasiumEnv(VecEnv):
@@ -199,7 +199,8 @@ class AS2GymnasiumEnv(VecEnv):
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, path_length, result = self.action_manager.take_action(
-                self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx)
+                self.observation_manager.frontiers, self.observation_manager.position_frontiers,
+                idx, self.observation_manager.grid_matrix)
             # Go to closest frontier
 
             if not result:
@@ -235,6 +236,7 @@ class AS2GymnasiumEnv(VecEnv):
                 if len(frontiers) == 0:  # No frontiers left, episode ends
                     self.buf_dones[idx] = True
                     self.cum_path_length.append(self.total_path_length)
+                    # self.buf_rews[idx] = 10.0
                     self.reset_single_env(idx)
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
@@ -327,10 +329,10 @@ class AS2GymnasiumEnv(VecEnv):
 
 if __name__ == "__main__":
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world_density_high", world_size=10.0,
+    env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
                           grid_size=200, min_distance=1.0, num_envs=1, policy_type="MultiInputPolicy")
     env.reset()
-    num_episodes = 10
+    num_episodes = 100
     episodes = list(range(1, num_episodes + 1))
     episode_count = 0
     _rewards = []
@@ -347,16 +349,16 @@ if __name__ == "__main__":
         episode_count += 1
         print("Episode:", episode_count)
     print("Mean reward:", np.mean(_rewards))
-    # accumulated_path = np.cumsum(env.cum_path_length)
-    # # Save to CSV
-    # df = pd.DataFrame({
-    #     'episode': episodes,
-    #     'path_length': env.cum_path_length,
-    #     'accumulated_path_length': accumulated_path
-    # })
-    # df.to_csv('path_data.csv', index=False)
+    accumulated_path = np.cumsum(env.cum_path_length)
+    # Save to CSV
+    df = pd.DataFrame({
+        'episode': episodes,
+        'path_length': env.cum_path_length,
+        'accumulated_path_length': accumulated_path
+    })
+    df.to_csv('csv/tare_local.csv', index=False)
 
-    # # Optional: plot the data
+    # Optional: plot the data
     # plt.figure(figsize=(8, 5))
     # plt.plot(df['episode'], df['accumulated_path_length'], marker='o')
     # plt.xlabel('Episode')

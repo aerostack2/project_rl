@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 
 from observation.observation import MultiChannelImageObservationWithFrontierFeatures as Observation
-from action.heuristic_action import NearestFrontierAction as Action
+from action.heuristic_action import HybridAction as Action
 
 
 class AS2GymnasiumEnv(VecEnv):
@@ -165,12 +165,14 @@ class AS2GymnasiumEnv(VecEnv):
     def reset_single_env(self, env_idx):
         self.total_path_length = 0
         self.activate_scan_srv.call(SetBool.Request(data=False))
-        self.pause_physics()
         self.clear_map_srv.call(Empty.Request())
+        self.pause_physics()
         print("Resetting drone", self.drone_interface_list[env_idx].drone_id)
         self.set_random_pose(self.drone_interface_list[env_idx].drone_id)
 
         self.unpause_physics()
+        self.clear_map_srv.call(Empty.Request())
+        time.sleep(1.0)
         self.activate_scan_srv.call(SetBool.Request(data=True))
         self.wait_for_map()
         # self.observation_manager.call_get_frontiers_with_msg(env_id=env_idx)
@@ -197,7 +199,7 @@ class AS2GymnasiumEnv(VecEnv):
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
             frontier, path_length, result = self.action_manager.take_action(
-                self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx)
+                self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx, self.observation_manager.grid_matrix)
             # Go to closest frontier
 
             if not result:
@@ -206,6 +208,11 @@ class AS2GymnasiumEnv(VecEnv):
                 self.wait_for_map()
                 frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
                     idx)
+                if len(frontiers) == 0:  # No frontiers left, episode ends
+                    self.buf_dones[idx] = True
+                    self.cum_path_length.append(self.total_path_length)
+                    # self.buf_rews[idx] = 10.0
+                    self.reset_single_env(idx)
             else:
                 # old_map = np.copy(self.observation_manager.grid_matrix[0])
 
@@ -228,7 +235,7 @@ class AS2GymnasiumEnv(VecEnv):
                 if len(frontiers) == 0:  # No frontiers left, episode ends
                     self.buf_dones[idx] = True
                     self.cum_path_length.append(self.total_path_length)
-                    self.buf_rews[idx] = 10.0
+                    # self.buf_rews[idx] = 10.0
                     self.reset_single_env(idx)
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
@@ -327,12 +334,20 @@ if __name__ == "__main__":
     num_episodes = 100
     episodes = list(range(1, num_episodes + 1))
     episode_count = 0
+    _rewards = []
+    episode_reward = 0.0
     for _ in range(num_episodes):
-        while (env.step_wait()[2][0] == False):
-            pass
+        done = False
+        while not done:
+            observations, rewards, dones, infos = env.step_wait()
+            episode_reward += rewards[0]
+            done = dones[0]
+        _rewards.append(episode_reward)
+        episode_reward = 0.0
+
         episode_count += 1
         print("Episode:", episode_count)
-
+    print("Mean reward:", np.mean(_rewards))
     accumulated_path = np.cumsum(env.cum_path_length)
     # Save to CSV
     df = pd.DataFrame({
@@ -340,17 +355,17 @@ if __name__ == "__main__":
         'path_length': env.cum_path_length,
         'accumulated_path_length': accumulated_path
     })
-    df.to_csv('path_data.csv', index=False)
+    df.to_csv('csv/hybrid_data.csv', index=False)
 
-    # Optional: plot the data
-    plt.figure(figsize=(8, 5))
-    plt.plot(df['episode'], df['accumulated_path_length'], marker='o')
-    plt.xlabel('Episode')
-    plt.ylabel('Accumulated Path Length')
-    plt.title('Accumulated Path Length per Episode')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+    # # Optional: plot the data
+    # plt.figure(figsize=(8, 5))
+    # plt.plot(df['episode'], df['accumulated_path_length'], marker='o')
+    # plt.xlabel('Episode')
+    # plt.ylabel('Accumulated Path Length')
+    # plt.title('Accumulated Path Length per Episode')
+    # plt.grid(True)
+    # plt.tight_layout()
+    # plt.show()
 
     env.drone_interface_list[0].shutdown()
     rclpy.shutdown()

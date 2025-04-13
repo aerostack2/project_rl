@@ -1,20 +1,6 @@
-import collections
-import warnings
-from functools import partial
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
-
-import numpy as np
-import math
-import torch as th
-from gymnasium import spaces
-from stable_baselines3.common.policies import BasePolicy
-from stable_baselines3.common.torch_layers import (
-    BaseFeaturesExtractor,
-    CombinedExtractor,
-    FlattenExtractor,
-    MlpExtractor,
-    NatureCNN,
-)
+from torch import nn
+from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
+from stable_baselines3.common.preprocessing import preprocess_obs
 from stable_baselines3.common.distributions import (
     BernoulliDistribution,
     CategoricalDistribution,
@@ -24,12 +10,29 @@ from stable_baselines3.common.distributions import (
     StateDependentNoiseDistribution,
     make_proba_distribution,
 )
+from stable_baselines3.common.torch_layers import (
+    BaseFeaturesExtractor,
+    CombinedExtractor,
+    FlattenExtractor,
+    MlpExtractor,
+    NatureCNN,
+)
+from stable_baselines3.common.policies import BasePolicy
+from gymnasium import spaces
+import torch as th
+import math
+import numpy as np
+import collections
+import warnings
+from functools import partial
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
+import os
+import sys
 
-from stable_baselines3.common.preprocessing import preprocess_obs
-from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
-from torch import nn
-from .features_extractors.attention_network import AttentionExtractor
-from .features_extractors.custom_cnn import NatureCNN_Mod
+sys.path.append(os.path.abspath(
+    '/home/javilinos/Desktop/as2_projects/project_rl/rl/algorithms/policies/features_extractors'))
+from custom_cnn import NatureCNN_Mod
+from attention_network import AttentionExtractor
 
 
 class ActorCriticPolicy(BasePolicy):
@@ -406,7 +409,7 @@ class ActorCriticPolicy(BasePolicy):
         else:
             raise ValueError("Invalid action distribution")
 
-    def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
+    def predict(self, observation: PyTorchObs, frontier_features: List[th.Tensor], deterministic: bool = False) -> th.Tensor:
         """
         Get the action according to the policy for a given observation.
 
@@ -414,7 +417,19 @@ class ActorCriticPolicy(BasePolicy):
         :param deterministic: Whether to use stochastic or deterministic actions
         :return: Taken action according to the policy
         """
-        return self.get_distribution(observation).get_actions(deterministic=deterministic)
+        print(observation.shape)
+        print(frontier_features)
+        return self.get_distribution(observation, frontier_features).get_actions(deterministic=deterministic)
+
+    def _predict(self, observation: PyTorchObs, frontier_features: List[th.Tensor], deterministic: bool = False) -> th.Tensor:
+        """
+        Get the action according to the policy for a given observation.
+
+        :param observation:
+        :param deterministic: Whether to use stochastic or deterministic actions
+        :return: Taken action according to the policy
+        """
+        return self.predict(observation, frontier_features, deterministic=deterministic)
 
     def evaluate_actions(self, obs: PyTorchObs, frontier_features_batch: List[List[th.Tensor]], actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
         """
@@ -471,16 +486,16 @@ class ActorCriticPolicy(BasePolicy):
         :param obs:
         :return: the action distribution.
         """
+        # Preprocess the observation if needed
         frontier_features_list = []
-        cnn_features = self.extract_features_super(
+        cnn_features = self.extract_features(
             self.observation_space, obs, self.features_extractor_cnn)
-
         for frontier_feature in frontier_features:
             flatenned_features = self.extract_features(spaces.Box(low=0.0, high=1.0, shape=(
                 5,), dtype=np.float32),
                 frontier_feature, self.features_extractor_flatten)
-            concat_features = th.cat((cnn_features, flatenned_features), dim=1)
-            frontier_features_list.append(concat_features)
+            # concat_features = th.cat((cnn_features, flatenned_features), dim=1)
+            frontier_features_list.append(flatenned_features)
 
         # Shape (batch_size, num_candidates, n_features_dim)
         features = th.stack(frontier_features_list, dim=1)

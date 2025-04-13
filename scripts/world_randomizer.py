@@ -76,9 +76,10 @@ def generate_world(world_name: str, num_world: int, num_object: int,
     world_size = 10.0
 
     for i in range(num_world):
-        world_name = f"{world_name}{i+2}"
+        world_name = f"{world_name}"
         drone = randomize_drone_pose(upper=world_size, lower=-world_size)
         drone_xy = drone['xyz'][:-1]
+        drone['model_name'] = "drone0"
         obstacles = generate_obstacles(
             num_object, drone_xy, safety_margin, world_size, -world_size)
 
@@ -98,7 +99,7 @@ def generate_world(world_name: str, num_world: int, num_object: int,
         with open(sdf_path, "w", encoding='utf-8') as sdf_file:
             sdf_file.write(sdf_output)
 
-        print(f"World {i+1} has been saved")
+        print(f"{world_name} has been saved")
 
 
 def main():
@@ -114,7 +115,7 @@ def main():
     parser.add_argument('margin_of_safety', metavar='safety', type=int, nargs='?',
                         default=2, help='margin of safety for the drone (m)')
     parser.add_argument('-name', '--world_name', metavar='name', type=str, nargs='?',
-                        default='world', help='generic name of generated worlds')
+                        default='world_density_high', help='generic name of generated worlds')
     args = parser.parse_args()
 
     num_obj = args.number_of_objects    # Number of Objects
