@@ -28,6 +28,54 @@ class PathActionClient:
         return result.result.success, result.result.path_length.data, result.result.path
 
 
+class RandomAction:
+    def __init__(self, drone_interface_list, grid_size):
+        self.dims = [grid_size, grid_size]
+        self.action_space = Discrete(grid_size * grid_size)
+        self.drone_interface_list = drone_interface_list
+        self.actions = []
+        self.generate_path_action_client_list = []
+        self.grid_size = grid_size
+        for drone_interface in self.drone_interface_list:
+            self.generate_path_action_client_list.append(
+                PathActionClient(
+                    drone_interface
+                )
+            )
+        self.chosen_action_pub = self.drone_interface_list[0].create_publisher(
+            PointStamped, "/chosen_action", 10
+        )
+
+    def convert_pose_to_grid_position(self, pose: list[float]):
+        desp = (self.grid_size) / 2
+        x = -(round(pose[1] * 10, 0) - desp)
+        y = -(round(pose[0] * 10, 0) - desp)
+        return np.array([x, y], dtype=np.int32)
+
+    def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id) -> tuple:
+        position = self.convert_pose_to_grid_position(self.drone_interface_list[0].position)
+        # Select random action index
+        action = random.randint(0, len(grid_frontier_list) - 1)
+
+        frontier = frontier_list[action]
+        # result, path_length, _ = self.generate_path_action_client_list[env_id].send_goal(frontier)
+        result, path_length, path = self.generate_path_action_client_list[env_id].send_goal(
+            frontier)
+        nav_path = []
+        if result:
+            for point in path:
+                nav_path.append([point.x, point.y])
+            # path_simplified = rdp(nav_path, epsilon=0.1)
+            path_length = self.path_length(nav_path)
+
+        return frontier, path_length, result
+
+    def path_length(self, path):
+        points = np.array(path)
+
+        return np.sum(np.linalg.norm(points[1:] - points[:-1], axis=1))
+
+
 class NearestFrontierAction:
     def __init__(self, drone_interface_list, grid_size):
         self.dims = [grid_size, grid_size]
@@ -137,7 +185,7 @@ class HybridAction:
             info_gain = self.compute_information_gain(grid_frontier, occupancy_grid, sensor_range)
 
             # utility = info_gain * np.exp(-lambda_weight * distance)
-            utility = (info_gain * 0.75) - (distance * 0.25)
+            utility = (info_gain * 0.25) - (distance * 0.75)
 
             if utility > best_utility:
                 best_utility = utility

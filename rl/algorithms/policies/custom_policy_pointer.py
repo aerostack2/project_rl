@@ -30,6 +30,12 @@ from torch import nn
 from features_extractors.pointer_network import PointerExtractor
 from features_extractors.custom_cnn import NatureCNN_Mod
 
+sys.path.append(os.path.abspath(
+    '/home/javilinos/Desktop/as2_projects/project_rl/rl/algorithms/policies/features_extractors'))
+    
+from attention_network import AttentionExtractor
+from custom_cnn import NatureCNN_Mod
+
 
 class ActorCriticPolicy(BasePolicy):
     """

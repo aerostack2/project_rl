@@ -304,7 +304,7 @@ class DiscreteCoordinateAction:  # To be used with MaskablePPO
             # path_simplified = rdp(nav_path, epsilon=0.1)
             path_length = self.path_length(nav_path)
 
-        return frontier, path_length, result
+        return frontier, path_length, result, nav_path
 
     def generate_random_action(self):
         return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]

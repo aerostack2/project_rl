@@ -28,7 +28,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 
 from observation.observation import MultiChannelImageObservationWithFrontierFeatures as Observation
-from action.heuristic_action import NearestFrontierAction as Action
+from action.heuristic_action import RandomAction as Action
 
 
 class AS2GymnasiumEnv(VecEnv):
@@ -89,6 +89,7 @@ class AS2GymnasiumEnv(VecEnv):
         self.area_explored = 0
         self.total_path_length = 0
         self.path_length = 0
+        print(self.obstacles)
 
     def pause_physics(self) -> bool:
         pause_physics_req = ControlWorld.Request()
@@ -224,6 +225,7 @@ class AS2GymnasiumEnv(VecEnv):
                     # self.buf_rews[idx] = 10.0
                     self.reset_single_env(idx)
                     break
+                # old_map = np.copy(self.observation_manager.grid_matrix[0])
 
             self.activate_scan_srv.call(SetBool.Request(data=False))
             self.set_pose(drone.drone_id, frontier[0], frontier[1])
@@ -427,8 +429,8 @@ if __name__ == "__main__":
         'path_length': path_length_per_episode
     })
 
-    # df.to_csv('csv/time_graphics_10_episodes/nearest.csv', index=False)
-    df2.to_csv('csv/bars_graphic_cum_mean_path_length/enormous_density/nearest.csv', index=False)
+    # df.to_csv('csv/time_graphics_10_episodes/random.csv', index=False)
+    df2.to_csv('csv/bars_graphic_cum_mean_path_length/enormous_density/random.csv', index=False)
 
     # # Optional: plot the data
     fig, ax = plt.subplots()

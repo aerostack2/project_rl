@@ -50,14 +50,14 @@ class Test:
         self.model = PPO.load(path, self.env)
 
     def test(self):
-        mean_reward, std_reward = evaluate_policy(self.model.policy, self.env, 10)
+        mean_reward, std_reward = evaluate_policy(self.model.policy, self.env, 20)
         print(f"mean_reward:{mean_reward:.2f} +/- {std_reward:.2f}")
         self.env.drone_interface_list[0].shutdown()
 
 
 if __name__ == '__main__':
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world_density_high", world_size=10.0,
+    env = AS2GymnasiumEnv(world_name="world_density_enormous", world_size=10.0,
                           grid_size=200, min_distance=1.0, num_envs=1, policy_type="CnnPolicy")
     env = VecMonitor(env)
     custom_callback = CustomCallback()

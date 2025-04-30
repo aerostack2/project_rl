@@ -84,7 +84,10 @@ class AS2GymnasiumEnv(VecEnv):
         # Other stuff
         self.obstacles = self.parse_xml(f"assets/worlds/{world_name}.sdf")
         self.cum_path_length = []
+        self.episode_path = []
+        self.area_explored = 0
         self.total_path_length = 0
+        self.path_length = 0
         print(self.obstacles)
 
     def pause_physics(self) -> bool:
@@ -195,11 +198,13 @@ class AS2GymnasiumEnv(VecEnv):
 
     def reset_single_env(self, env_idx):
         self.total_path_length = 0
+        self.area_explored = 0
         self.activate_scan_srv.call(SetBool.Request(data=False))
         self.pause_physics()
         self.clear_map_srv.call(Empty.Request())
         print("Resetting drone", self.drone_interface_list[env_idx].drone_id)
         self.set_random_pose(self.drone_interface_list[env_idx].drone_id)
+        # self.set_pose(self.drone_interface_list[env_idx].drone_id, 0.0, 0.0)
 
         self.unpause_physics()
         self.activate_scan_srv.call(SetBool.Request(data=True))
@@ -207,8 +212,9 @@ class AS2GymnasiumEnv(VecEnv):
         # self.observation_manager.call_get_frontiers_with_msg(env_id=env_idx)
         # while self.observation_manager.wait_for_frontiers == 0:
         #     pass
-        frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
+        frontiers, position_frontiers, discovered_area = self.observation_manager.get_frontiers_and_position(
             env_idx)
+        self.area_explored = discovered_area
         if len(frontiers) == 0:
             return self.reset_single_env(env_idx)
         obs = self._get_obs(env_idx)
@@ -226,20 +232,22 @@ class AS2GymnasiumEnv(VecEnv):
     def step_wait(self) -> None:
         for idx, drone in enumerate(self.drone_interface_list):
             # self.action_manager.actions = self.action_manager.generate_random_action()
-            frontier, path_length, result = self.action_manager.take_action(
+            frontier, self.path_length, result, nav_path = self.action_manager.take_action(
                 self.observation_manager.frontiers, self.observation_manager.position_frontiers, idx)
 
             if not result:
                 print("Failed to reach goal")
                 self.buf_dones[idx] = False
                 self.wait_for_map()
-                frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
+                frontiers, position_frontiers, discovered_area = self.observation_manager.get_frontiers_and_position(
                     idx)
             else:
                 # old_map = np.copy(self.observation_manager.grid_matrix[0])
+                self.episode_path.append(nav_path)
                 self.activate_scan_srv.call(SetBool.Request(data=False))
                 self.set_pose(drone.drone_id, frontier[0], frontier[1])
                 self.activate_scan_srv.call(SetBool.Request(data=True))
+                self.wait_for_map()
                 self.wait_for_map()
                 # new_map = np.copy(self.observation_manager.grid_matrix[0])
 
@@ -247,7 +255,7 @@ class AS2GymnasiumEnv(VecEnv):
                 # discovered_area_rew = (np.sum(old_map == 0) -
                 #                        np.sum(new_map == 0)
                 #                        ) / max_area  # Reward based on discovered area
-                frontiers, position_frontiers = self.observation_manager.get_frontiers_and_position(
+                frontiers, position_frontiers, discovered_area = self.observation_manager.get_frontiers_and_position(
                     idx)
 
                 obs = self._get_obs(idx)
@@ -256,14 +264,15 @@ class AS2GymnasiumEnv(VecEnv):
 
                 max_distance = math.sqrt((self.world_size * 2)**2 + (self.world_size * 2)**2)
 
-                self.buf_rews[idx] = -(path_length / max_distance)
+                self.buf_rews[idx] = -(self.path_length / max_distance)
                 self.buf_dones[idx] = False
-                self.total_path_length += path_length
+                self.total_path_length += self.path_length
+                self.area_explored = discovered_area
 
                 if len(frontiers) == 0:  # No frontiers left, episode ends
                     self.buf_dones[idx] = True
                     self.cum_path_length.append(self.total_path_length)
-                    self.reset_single_env(idx)
+                    # self.reset_single_env(idx)
 
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones), deepcopy(self.buf_infos))
 

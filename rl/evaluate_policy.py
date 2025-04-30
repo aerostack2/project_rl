@@ -10,6 +10,87 @@ from algorithms.policies.custom_policy_attention import ActorCriticCnnPolicy, Ac
 from environments.as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
 from stable_baselines3.common.utils import obs_as_tensor
 import pandas as pd
+import matplotlib.pyplot as plt
+
+
+def fill_data(matrix):
+    '''Grab a list of lists and make all the lists the same length, given the longest list, by filling with 1.0'''
+    max_len = max(len(lst) for lst in matrix)
+    for lst in matrix:
+        while len(lst) < max_len:
+            lst.append(1.0)
+
+
+def get_std_dev(matrix):
+    '''Grab a list of lists and return the standard deviation of the elements of each index in a new list'''
+    std_vector = []
+    for i in range(len(matrix[0])):
+        column = [lst[i] for lst in matrix]
+        std_vector.append(np.std(column))
+
+    return std_vector
+
+
+def get_mean(matrix):
+    '''Grab a list of lists and return the mean of the elements of each index in a new list'''
+    mean_vector = []
+    for i in range(len(matrix[0])):
+        column = [lst[i] for lst in matrix]
+        mean_vector.append(np.mean(column))
+
+    return mean_vector
+
+
+def plot_path(obstacles, paths):
+    # ——— Your data ———
+    # list of (x, y) obstacle centers
+
+    # list of paths; each path is a list of [x, y] positions
+    # (here we generate some random walks as an example)
+    # ——————————
+
+    GRID_SIZE = 20
+    HALF = GRID_SIZE / 2
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    # 1) draw background grid
+    ax.set_xticks(range(-int(HALF), int(HALF) + 1))
+    ax.set_yticks(range(-int(HALF), int(HALF) + 1))
+    ax.grid(which='both', linestyle='--', color='lightgray', linewidth=0.5)
+
+    # optional: move axes spines to the center
+    for spine in ['left', 'bottom']:
+        ax.spines[spine].set_position('zero')
+    for spine in ['right', 'top']:
+        ax.spines[spine].set_visible(False)
+
+    # 2) plot obstacles as filled black circles
+    xo, yo = zip(*obstacles)
+    ax.scatter(xo, yo,
+               s=200,           # adjust circle size
+               color='black',
+               zorder=3,
+               label='Obstacles')
+
+    # 3) plot each path with low alpha so overlaps darken
+    for path in paths:
+        xs, ys = zip(*path)
+        ax.plot(xs, ys,
+                color='red',    # pick your robot-color
+                linewidth=2,
+                alpha=0.05,     # tweak to control how fast overlap darkens
+                zorder=1)
+
+    # 4) finalize
+    ax.set_aspect('equal', 'box')
+    ax.set_xlim(-HALF, HALF)
+    ax.set_ylim(-HALF, HALF)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.legend(loc='upper left')
+    plt.tight_layout()
+    plt.show()
 
 
 def evaluate_policy(
@@ -88,6 +169,18 @@ def evaluate_policy(
     current_lengths = np.zeros(n_envs, dtype="int")
     observations = env.reset()
     episode_starts = np.ones((env.num_envs,), dtype=bool)
+    episodes = list(range(1, n_eval_episodes + 1))
+    ###### matrix initialization #######
+    area_explored_matrix = []
+    cum_path_length_matrix = []
+
+    step_path_length = []
+    area_explored = []
+    path_to_plot = []
+    path_length_per_episode = []
+    episode_reward = 0.0
+    step_path_length.append(0)
+    area_explored.append(env.area_explored)
 
     while (episode_counts < episode_count_targets).any():
         last_frontier_features = env.frontier_features()
@@ -103,6 +196,8 @@ def evaluate_policy(
             deterministic=deterministic,
         )
         new_observations, rewards, dones, infos = env.step(actions)
+        step_path_length.append(env.path_length)
+        area_explored.append(env.area_explored)
         current_rewards += rewards
         current_lengths += 1
         for i in range(n_envs):
@@ -117,6 +212,17 @@ def evaluate_policy(
                     callback(locals(), globals())
 
                 if dones[i]:
+                    area_explored_matrix.append(area_explored)
+                    accumulated_path = np.cumsum(step_path_length)
+                    cum_path_length_matrix.append(accumulated_path)
+                    episode_path_length = np.sum(step_path_length)
+                    path_length_per_episode.append(episode_path_length)
+                    path_to_plot.append(env.episode_path)
+                    env.reset()
+                    step_path_length = []
+                    area_explored = []
+                    step_path_length.append(0)
+                    area_explored.append(env.area_explored)
                     if is_monitor_wrapped:
                         # Atari wrapper can send a "done" signal when
                         # the agent loses a life, but it does not correspond
@@ -141,8 +247,55 @@ def evaluate_policy(
         if render:
             env.render()
 
-    accumulated_path = np.cumsum(env.cum_path_length)
-    episodes = list(range(1, n_eval_episodes + 1))
+    # plot_path(env.obstacles, path_to_plot)
+
+    # accumulated_path = np.cumsum(env.cum_path_length)
+    # episodes = list(range(1, n_eval_episodes + 1))
+    # accumulated_path = np.cumsum(step_path_length)
+    # print(len(accumulated_path))
+    # print(len(area_explored))
+    # Save to CSV
+    fill_data(area_explored_matrix)
+    mean_area_explored = get_mean(area_explored_matrix)
+    std_area_explored = get_std_dev(area_explored_matrix)
+    # just return the biggest length list in the matrix cum_path_length_matrix
+    distance = max(cum_path_length_matrix, key=len)
+    df = pd.DataFrame({
+        'distance': distance,
+        'mean_area_explored': mean_area_explored,
+        'std_area_explored': std_area_explored
+    })
+    df2 = pd.DataFrame({
+        'episode': episodes,
+        'path_length': path_length_per_episode
+    })
+
+    # df.to_csv('csv/time_graphics_10_episodes/ours.csv', index=False)
+    df2.to_csv('csv/bars_graphic_cum_mean_path_length/enormous_density/ours.csv', index=False)
+
+    # # Optional: plot the data
+    fig, ax = plt.subplots()
+
+    # Plot mean (darkest color)
+    ax.plot(df['distance'], df['mean_area_explored'],
+            color='blue', alpha=1.0, label='Mean Area Explored')
+
+    # Plot standard deviation as transparent band
+    ax.fill_between(
+        df['distance'],
+        df['mean_area_explored'] - df['std_area_explored'],
+        df['mean_area_explored'] + df['std_area_explored'],
+        color='blue', alpha=0.3, label='Std Dev'
+    )
+
+    ax.set_xlabel('Distance')
+    ax.set_ylabel('Area Explored')
+    ax.set_title('Mean Area Explored with Standard Deviation')
+    ax.legend()
+
+    plt.show()
+
+    env.drone_interface_list[0].shutdown()
     # Save to CSV
     # df = pd.DataFrame({
     #     'episode': episodes,
