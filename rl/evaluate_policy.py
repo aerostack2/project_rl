@@ -7,7 +7,7 @@ import numpy as np
 from stable_baselines3.common import type_aliases
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, VecMonitor, is_vecenv_wrapped
 from algorithms.policies.custom_policy_attention import ActorCriticCnnPolicy, ActorCriticPolicy
-from environments.as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
+from environments.as2_gymnasium_env_discrete_single_agent import AS2GymnasiumEnv
 from stable_baselines3.common.utils import obs_as_tensor
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -42,53 +42,52 @@ def get_mean(matrix):
 
 
 def plot_path(obstacles, paths):
-    # ——— Your data ———
-    # list of (x, y) obstacle centers
-
-    # list of paths; each path is a list of [x, y] positions
-    # (here we generate some random walks as an example)
-    # ——————————
-
     GRID_SIZE = 20
     HALF = GRID_SIZE / 2
 
     fig, ax = plt.subplots(figsize=(6, 6))
 
-    # 1) draw background grid
-    ax.set_xticks(range(-int(HALF), int(HALF) + 1))
-    ax.set_yticks(range(-int(HALF), int(HALF) + 1))
-    ax.grid(which='both', linestyle='--', color='lightgray', linewidth=0.5)
+    # 1) major ticks only at -10, 0, +10
+    ax.set_xticks([-10, 0, 10])
+    ax.set_yticks([-10, 0, 10])
 
-    # optional: move axes spines to the center
-    for spine in ['left', 'bottom']:
-        ax.spines[spine].set_position('zero')
-    for spine in ['right', 'top']:
-        ax.spines[spine].set_visible(False)
+    # 2) minor ticks at every integer
+    ax.set_xticks(range(-int(HALF), int(HALF) + 1), minor=True)
+    ax.set_yticks(range(-int(HALF), int(HALF) + 1), minor=True)
 
-    # 2) plot obstacles as filled black circles
+    # 3) draw minor-grid (dashed) and major-grid (solid)
+    ax.grid(which='minor', linestyle='--', linewidth=0.5)
+    ax.grid(which='major', linestyle='-', linewidth=1)
+
+    # 4) hide all spines (no painted axis lines)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    # 5) label axes
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+
+    # 6) plot obstacles (smaller circles)
     xo, yo = zip(*obstacles)
     ax.scatter(xo, yo,
-               s=200,           # adjust circle size
+               s=50,
                color='black',
-               zorder=3,
-               label='Obstacles')
+               zorder=3)
 
-    # 3) plot each path with low alpha so overlaps darken
+    # 7) plot paths: blue, thicker, darker overlaps
     for path in paths:
         xs, ys = zip(*path)
         ax.plot(xs, ys,
-                color='red',    # pick your robot-color
-                linewidth=2,
-                alpha=0.05,     # tweak to control how fast overlap darkens
+                color='blue',
+                linewidth=5,
+                alpha=0.3,
                 zorder=1)
 
-    # 4) finalize
+    # 8) enforce aspect & limits
     ax.set_aspect('equal', 'box')
     ax.set_xlim(-HALF, HALF)
     ax.set_ylim(-HALF, HALF)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.legend(loc='upper left')
+
     plt.tight_layout()
     plt.show()
 
@@ -217,7 +216,7 @@ def evaluate_policy(
                     cum_path_length_matrix.append(accumulated_path)
                     episode_path_length = np.sum(step_path_length)
                     path_length_per_episode.append(episode_path_length)
-                    path_to_plot.append(env.episode_path)
+                    path_to_plot = env.episode_path
                     env.reset()
                     step_path_length = []
                     area_explored = []
@@ -271,7 +270,7 @@ def evaluate_policy(
     })
 
     # df.to_csv('csv/time_graphics_10_episodes/ours.csv', index=False)
-    df2.to_csv('csv/bars_graphic_cum_mean_path_length/enormous_density/ours.csv', index=False)
+    # df2.to_csv('csv/bars_graphic_cum_mean_path_length/enormous_density/ours.csv', index=False)
 
     # # Optional: plot the data
     fig, ax = plt.subplots()

@@ -759,7 +759,6 @@ class MultiChannelImageObservationWithFrontierFeatures:
             self.position_frontiers.append((position_frontier[0], position_frontier[1]))
         max_area = self.grid_size * self.grid_size
 
-        # Reward based on discovered area
         discovered_area = np.sum(self.grid_matrix[2] == 0) / max_area
         return self.frontiers, self.position_frontiers, discovered_area
 

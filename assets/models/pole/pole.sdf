@@ -36,11 +36,11 @@
                 </geometry>
             </collision> -->
         </link>
-        <frame name="mount_point"/>
+        <!-- <frame name="mount_point"/> -->
 
-        <joint name="world_to_base_link=" type="fixed">
+        <!-- <joint name="world_to_base_link=" type="fixed">
             <parent>world</parent>
             <child>pole_link</child>
-        </joint>
+        </joint> -->
     </model>
 </sdf>

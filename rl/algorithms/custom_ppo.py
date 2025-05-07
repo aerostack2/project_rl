@@ -2,7 +2,7 @@ from stable_baselines3.common.utils import explained_variance, get_schedule_fn, 
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.buffers import DictRolloutBuffer
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
-from environments.as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
+from environments.as2_gymnasium_env_discrete_single_agent import AS2GymnasiumEnv
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 from custom_buffer import RolloutBuffer

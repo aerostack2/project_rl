@@ -115,7 +115,7 @@ def main():
     parser.add_argument('margin_of_safety', metavar='safety', type=int, nargs='?',
                         default=2, help='margin of safety for the drone (m)')
     parser.add_argument('-name', '--world_name', metavar='name', type=str, nargs='?',
-                        default='world_density_high', help='generic name of generated worlds')
+                        default='world_density_enormous', help='generic name of generated worlds')
     args = parser.parse_args()
 
     num_obj = args.number_of_objects    # Number of Objects

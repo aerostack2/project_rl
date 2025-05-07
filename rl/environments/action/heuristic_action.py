@@ -52,7 +52,7 @@ class RandomAction:
         y = -(round(pose[0] * 10, 0) - desp)
         return np.array([x, y], dtype=np.int32)
 
-    def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id) -> tuple:
+    def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id, occupancy_grid) -> tuple:
         position = self.convert_pose_to_grid_position(self.drone_interface_list[0].position)
         # Select random action index
         action = random.randint(0, len(grid_frontier_list) - 1)
@@ -68,7 +68,7 @@ class RandomAction:
             # path_simplified = rdp(nav_path, epsilon=0.1)
             path_length = self.path_length(nav_path)
 
-        return frontier, path_length, result
+        return frontier, path_length, result, nav_path
 
     def path_length(self, path):
         points = np.array(path)
@@ -100,7 +100,7 @@ class NearestFrontierAction:
         y = -(round(pose[0] * 10, 0) - desp)
         return np.array([x, y], dtype=np.int32)
 
-    def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id) -> tuple:
+    def take_action(self, frontier_list, grid_frontier_list: list[list[int]], env_id, occupancy_grid) -> tuple:
         position = self.convert_pose_to_grid_position(self.drone_interface_list[0].position)
         # Get closest frontier position based on euclidean distance
         closest_distance = np.inf
@@ -124,7 +124,7 @@ class NearestFrontierAction:
             # path_simplified = rdp(nav_path, epsilon=0.1)
             path_length = self.path_length(nav_path)
 
-        return frontier, path_length, result
+        return frontier, path_length, result, nav_path
 
     def generate_random_action(self):
         return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]
@@ -185,7 +185,7 @@ class HybridAction:
             info_gain = self.compute_information_gain(grid_frontier, occupancy_grid, sensor_range)
 
             # utility = info_gain * np.exp(-lambda_weight * distance)
-            utility = (info_gain * 0.25) - (distance * 0.75)
+            utility = (info_gain * 0.5) - (distance * 0.5)
 
             if utility > best_utility:
                 best_utility = utility
@@ -203,7 +203,7 @@ class HybridAction:
                 nav_path.append([point.x, point.y])
             path_length = self.path_length(nav_path)
 
-        return frontier, path_length, result
+        return frontier, path_length, result, nav_path
 
     def generate_random_action(self):
         return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]
@@ -292,7 +292,7 @@ class TAREAction:
                 nav_path.append([point.x, point.y])
             path_length = self.path_length(nav_path)
 
-        return best_frontier, path_length, result
+        return best_frontier, path_length, result, nav_path
 
     def generate_random_action(self):
         return [random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1)]

@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from algorithms.policies.custom_policy_attention import ActorCriticCnnPolicy, ActorCriticPolicy
 from algorithms.custom_ppo import PPO
 
-from environments.as2_gymnasium_env_discrete_per_frontier import AS2GymnasiumEnv
+from environments.as2_gymnasium_env_discrete_single_agent import AS2GymnasiumEnv
 from algorithms.policies.features_extractors.custom_cnn import CustomCombinedExtractor, NatureCNN_Mod
 
 import argparse
@@ -126,8 +126,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     rclpy.init()
-    env = AS2GymnasiumEnv(world_name="world_density_high", world_size=10.0,
-                          grid_size=200, min_distance=1.0, num_envs=1, policy_type="CnnPolicy")
+    env = AS2GymnasiumEnv(world_name="world2", world_size=10.0,
+                          grid_size=200, min_distance=1.0, num_envs=1, policy_type="CnnPolicy", testing=False)
     #
     env = VecMonitor(env)
     # env = ActionMasker(env.venv, action_mask_fn=Training.mask_fn)
